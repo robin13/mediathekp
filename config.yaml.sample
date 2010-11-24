@@ -1,0 +1,4 @@
+---
+cache_dir: /tmp/mediathek_cache
+flvstreamer: /usr/bin/flvstreamer
+target_dir: /tmp/mediathek_target
