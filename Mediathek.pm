@@ -3,24 +3,23 @@ use strict;
 use warnings;
 
 BEGIN { $Class::Date::WARNINGS=0; }
-use Lingua::DE::ASCII;
 
+use DBI;
 use WWW::Mechanize;
+use XML::Twig;
 use File::Util;
-use YAML::Any qw/LoadFile DumpFile Dump/;
+use File::Spec::Functions;
+use YAML::Any qw/Dump/;
 use Log::Log4perl;
 
-use XML::Simple;
 use Data::Dumper;
 use Class::Date qw/date/;
-use DBI;
-use XML::Twig;
 use Memory::Usage;
 use Format::Human::Bytes;
 
 use IO::Uncompress::Unzip qw(unzip $UnzipError) ;
 
-use Video::Flvstreamer;
+use Video::Flvstreamer 0.02;
 
 sub new{
     my( $class, $args ) = @_;
@@ -76,15 +75,16 @@ sub new{
     if( ! $args->{cache_dir} || ! -d $args->{cache_dir} ){
         die( "Cannot run without defining cache dir, or cache dir does not exist" );
     }
-    $self->{cache_files}->{sources}   = $args->{cache_dir} . $f->SL() . 'sources.xml';
-    $self->{cache_files}->{media}     = $args->{cache_dir} . $f->SL() . 'media.xml';
-    $self->{cache_files}->{media_zip} = $args->{cache_dir} . $f->SL() . 'media.zip';
-    $self->{cache_files}->{db}        = $args->{cache_dir} . $f->SL() . 'mediathek.db';
+    $self->{cache_files}->{sources}   = catfile( $args->{cache_dir}, 'sources.xml' );
+    $self->{cache_files}->{media}     = catfile( $args->{cache_dir}, 'media.xml' );
+    $self->{cache_files}->{media_zip} = catfile( $args->{cache_dir}, 'media.zip' );
+    $self->{cache_files}->{db}        = catfile( $args->{cache_dir}, 'mediathek.db' );
 
     my $flv = Video::Flvstreamer->new( { target_dir  => $args->{target_dir},
                                          timeout     => $args->{timeout},
                                          flvstreamer => $args->{flvstreamer},
-                                         socks       => $args->{socks},
+                                         socks       => $args->{socks}, 
+                                         debug       => $self->{logger}->is_debug(),
                                         } );
     $self->{flv} = $flv;
 
@@ -399,37 +399,56 @@ sub count_videos{
 sub list{
     my( $self, $args ) = @_;
 
-    if( $args->{title} ){
-        return $self->list_videos( $args );
-    }elsif( $args->{theme} ){
-        return $self->list_themes( $args );
-    }else{
-        return $self->list_channels( $args );
-    }
-}
-
-sub list_videos{
-    my( $self, $args ) = @_;
-
-    my $sql = 'SELECT c.channel, t.theme, m.* '.
-      'FROM media m ' .
-      'JOIN map_media mm ON m.id=mm.media_id ' .
-      'JOIN themes t ON t.id=mm.theme_id '.
-      'JOIN channels c ON c.id=t.channel_id';
-
-    my( @where_sql, @where_args );
+    my( @joins, @selects, @where_sql, @where_args );
+    push( @selects, 'c.channel' );
+    push( @selects, 'c.id AS channel_id' );
     if( $args->{channel} ){
-        push( @where_sql, 'c.channel=?' );
+        if( $args->{channel} =~ m/\*/ ){
+            $args->{channel} =~ s/\*/\%/g;
+            push( @where_sql, 'c.channel LIKE ?' );
+        }else{
+            push( @where_sql, 'c.channel=?' );
+        }
         push( @where_args, $args->{channel} );
     }
+    if( $args->{list_all} || $args->{channel} || $args->{theme} || $args->{title} || $args->{media_id} ){
+        push( @joins, 'JOIN themes t ON c.id=t.channel_id' );
+        push( @selects, 't.theme' );
+        push( @selects, 't.id AS theme_id' );
+    }
     if( $args->{theme} ){
-        push( @where_sql, 't.theme=?' );
+        if( $args->{theme} =~ m/\*/ ){
+            $args->{theme} =~ s/\*/\%/g;
+            push( @where_sql, 't.theme LIKE ?' );
+        }else{
+            push( @where_sql, 't.theme=?' );
+        }
         push( @where_args, $args->{theme} );
     }
+    if( $args->{list_all} || $args->{title} || $args->{theme} || $args->{media_id} ){
+        push( @selects, 'm.id AS media_id' );
+        push( @selects, 'm.*' );
+        push( @joins, 'JOIN map_media mm ON mm.theme_id=t.id' );
+        push( @joins, 'JOIN media m ON mm.media_id=m.id' );
+    }
     if( $args->{title} ){
-        push( @where_sql, 'm.title=?' );
+        if( $args->{title} =~ m/\*/ ){
+            $args->{title} =~ s/\*/\%/g;
+            push( @where_sql, 'm.title LIKE ?' );
+        }else{
+            push( @where_sql, 'm.title=?' );
+        }
         push( @where_args, $args->{title} );
     }
+    if( $args->{media_id} ){
+        push( @where_sql, 'm.id=?' );
+        push( @where_args, $args->{media_id} );
+    }
+
+
+    my $sql = 'SELECT ' . join( ', ',  @selects ) .
+      ' FROM channels c ' .
+      join( ' ', @joins );
     if( scalar( @where_sql ) > 0 ){
         $sql .= ' WHERE ' . join( ' AND ', @where_sql );
     }
@@ -442,7 +461,16 @@ sub list_videos{
     my $row;
     my $out;
     while( $row = $sth->fetchrow_hashref() ){
-        $out->{$row->{channel}}->{$row->{theme}}->{$row->{title}} = $row->{id};
+        $out->{channels}->{$row->{channel_id}} = $row->{channel};
+        if( $row->{theme_id} ){
+            $out->{themes}->{$row->{theme_id}} = { theme      => $row->{theme},
+                                                   channel_id => $row->{channel_id} };
+        }
+        if( $row->{media_id} ){
+            $out->{media}->{$row->{media_id}} = { title    => $row->{title},
+                                                  theme_id => $row->{theme_id},
+                                                  url      => $row->{url} };
+        }
     }
     return $out;
 }
@@ -458,53 +486,32 @@ sub get_videos{
         die( __PACKAGE__ . " target dir does not exist: $self->{target_dir}" );
     }
 
-    my $sql = 'SELECT channels.channel, themes.theme, media.* FROM channels '.
-      'JOIN themes ON channels.id=themes.channel_id '.
-      'JOIN map_media  ON map_media.theme_id=themes.id '.
-      'JOIN media ON media.id=map_media.media_id WHERE ';
-    my( @sql_where, @sql_args );
-    if( $args->{channel} ){
-        push( @sql_where, "channels.channel=?" );
-        push( @sql_args, $args->{channel} );
-    }
-    if( $args->{theme} ){
-        push( @sql_where, "themes.theme=?" );
-        push( @sql_args, $args->{theme} );
-    }
-    if( $args->{title} ){
-        push( @sql_where, "media.title=?" );
-        push( @sql_args, $args->{title} );
-    }
-    $sql .= join( ' AND ', @sql_where );
-    $sql .= ' GROUP BY media.id';
+    $args->{list_all} = 1;
+    my $list = $self->list( $args );
 
-    $self->{logger}->info( "SQL: $sql" );
-    my $sth = $self->{dbh}->prepare( $sql );
-    $sth->execute( @sql_args );
-
-    my $count = 0;
-    my $row;
-    my %videos;
-
-    while( $row = $sth->fetchrow_hashref ){
-        $videos{ $count } = $row;
-        $count++;
+    if( ! $list->{media} ){
+        $self->{logger}->warn( "No videos found matching your search..." );
     }
-    $self->{logger}->info( "Found $count videos matching" );
 
-    foreach( sort( keys( %videos ) ) ){
-        my $video = $videos{$_};
-        my $target_dir = join( $self->{f}->SL(), ( $self->{target_dir} . $self->{f}->SL() . $video->{channel}, $video->{theme} ) );
+    $self->{logger}->info( "Found " . scalar( keys( %{ $list->{media} } ) ) . " videos to download" );
+
+    foreach( sort( keys( %{ $list->{media} } ) ) ){
+        my $video = $list->{media}->{$_};
+        my $theme = $list->{themes}->{ $video->{theme_id} }->{theme};
+        my $channel = $list->{channels}->{ $list->{themes}->{ $video->{theme_id} }->{channel_id} };
+        my $target_dir = catfile( $self->{target_dir}, $channel, $theme );
         $self->{logger}->debug( "Target dir: $target_dir" );
         if( ! -d $target_dir ){
             if( ! $self->{f}->make_dir( $target_dir ) ){
                 die( "Could not make target dir: $target_dir" );
             }
         }
-        my $target_path = $target_dir . $self->{f}->SL() . $video->{title} . '.avi';
+        my $target_path = catfile( $target_dir, $video->{title} . '.avi' );
         $target_dir =~ s/\W/_/g;
-        $self->{logger}->info( sprintf( "Getting %s/%s/%s", $video->{channel}, $video->{theme}, $video->{title} ) );
-        $self->{flv}->get_raw( $video->{url}, $target_path );
+        $self->{logger}->info( sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
+        if( ! $args->{test} ){
+            $self->{flv}->get_raw( $video->{url}, $target_path );
+        }
     }
 }
 

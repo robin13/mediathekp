@@ -7,6 +7,7 @@ use Log::Log4perl;
 use YAML::Any qw/Dump LoadFile DumpFile/;
 use Encode;
 use File::Util;
+use Data::Dumper;
 
 $SIG{'INT'} = 'cleanup';
 $SIG{'QUIT'} = 'cleanup';
@@ -24,11 +25,14 @@ my $result = GetOptions ( 'agent=s'       => \$args->{agent},
                           'proxy=s'       => \$args->{proxy},
                           'socks=s'       => \$args->{socks},
                           'config=s'      => \$args->{config},
+                          'test'          => \$args->{test},
+                          'tries=i'       => \$args->{tries},
 
                         # Filters
                           'channel=s'     => \$args->{channel},
                           'theme=s'       => \$args->{theme},
                           'title=s'       => \$args->{title},
+                          'id=i'          => \$args->{id},
 
                         # Required for downloading
                           'target_dir=s'  => \$args->{target_dir},
@@ -79,7 +83,6 @@ if( ! -d $args->{cache_dir} ){
 Log::Log4perl->init( 'log.conf' );
 my $logger = Log::Log4perl->get_logger();
 
-DumpFile( 'last_config.yaml', $args );
 $logger->debug( "Args:\n" . Dump( $args ) );
 
 # Pass the memory usage monitor to Mediathek
@@ -94,20 +97,22 @@ if( $args->{action} ){
         $media->refresh_media();
     }elsif( $args->{action} eq 'download' ){
         # Download videos
-        $media->get_videos( { channel => $args->{channel},
-                              theme   => $args->{theme},
-                              title   => $args->{title},
+        $media->get_videos( { channel  => $args->{channel},
+                              theme    => $args->{theme},
+                              title    => $args->{title},
+                              media_id => $args->{id},
+                              test     => $args->{test},
                           } );
     }elsif( $args->{action} eq 'count' ){
         # Count the number of videos
-        my $count_videos = $media->count_videos( { channel => $args->{channel},
-                                                   theme   => $args->{theme},
-                                                   title   => $args->{title},
+        my $count_videos = $media->count_videos( { channel  => $args->{channel},
+                                                   theme    => $args->{theme},
+                                                   title    => $args->{title},
+                                                   media_id => $args->{id},
                                                } );
         print "Number of videos matching: $count_videos\n";
     }elsif( $args->{action} eq 'list' ){
-        # List videos meeting criteria
-        print list_videos( $media );
+        print list( $media );
     }elsif( $args->{action} eq 'init_db' ){
         $media->init_db();
     }else{
@@ -146,48 +151,98 @@ sub dump_memory_report{
     }
 }
 
-sub list_videos{
+sub list{
     my( $media ) = @_;
-    my $list = $media->list( { channel => $args->{channel},
-                                      theme   => $args->{theme},
-                                      title   => $args->{title},
-                                  } );
+    my $list = $media->list({ channel => $args->{channel},
+                              theme   => $args->{theme},
+                              title   => $args->{title},
+                              media_id => $args->{id},
+                            } );
+    if( ! $list or ! $list->{channels} ){
+        return "No matches found\n";
+    }
 
-    # Find out the max width of each column
-    my %max;
-    my $video_count = 0;
-    my @rows;
-    foreach my $channel( keys( %$list ) ){
-        ###FIXME Use a Mediathek::Video object here
-        if( ! $max{channel} || length( $channel ) > $max{channel} ){
-            $max{channel} = length( $channel );
-        }
-        foreach my $theme( keys( %{ $list->{$channel} } ) ){
-            if( ! $max{theme} || length( $theme ) > $max{theme} ){
-                $max{theme} = length( $theme );
-            }
-            foreach my $title( keys( %{ $list->{$channel}->{$theme} } ) ){
-                if( ! $max{title} || length( $title ) > $max{title} ){
-                    $max{title} = length( $title );
-                }
-                $video_count++;
-                if( ! $max{id} || length( $list->{$channel}->{$theme}->{$title} ) > $max{id} ){
-                    $max{id} = length( $list->{$channel}->{$theme}->{$title} );
-                }
-                push( @rows, [ $list->{$channel}->{$theme}->{$title}, $channel, $theme, $title ] );
-            }
-        }
+    if( ! $list->{themes} ){
+        return list_channels( $list );
+    }elsif( ! $list->{media} and $list->{themes} ){
+        return list_themes( $list );
+    }elsif( $list->{media} and $list->{themes} ){
+        return list_titles( $list );
+    }else{
+        return "No suitable list to print...\n" . Dumper( $list ) . "\n";
     }
-    foreach( keys( %max ) ){
-        $max{$_} += 2;
-    }
-    my $format = "%$max{id}s %-$max{channel}s %-$max{theme}s %-$max{title}s\n";
-    my $list_string = sprintf( $format, 'ID', 'Channel', 'Theme', 'Title' );
-    foreach my $row( @rows ){
-        $list_string .= sprintf( $format, @$row )
-    }
-    return $list_string;
 }
+
+sub list_channels{
+    my $list = shift;
+
+    my $fmt =  ( ' ' x 4 ) . "%s\n";
+    my $rtn = sprintf( $fmt, 'Channel' );
+    $rtn .= sprintf( $fmt, '=======' );
+    foreach( sort ( values( %{ $list->{channels} } ) ) ){
+        $rtn .= sprintf $fmt, $_;
+    }
+    return $rtn;
+}
+
+sub list_themes{
+    my $list = shift;
+
+    # Find length of longest channel name
+    my $max_channel = length( "Channel" );
+    foreach( keys( %{ $list->{channels} } ) ){
+        if( ! $max_channel || length( $list->{channels}->{$_} ) > $max_channel ){
+            $max_channel = length( $list->{channels}->{$_} );
+        }
+    }
+
+    my $fmt =  ( ' ' x 4 ) . '%-' . $max_channel . "s || %s\n";
+    my $rtn = sprintf( $fmt, 'Channel', 'Theme' );
+    $rtn .= sprintf( $fmt, '=======', '=====' );
+    foreach my $channel_id ( sort{ $list->{channels}->{$a} cmp $list->{channels}->{$b} }( keys( %{ $list->{channels} } ) ) ){
+        foreach my $theme_id ( sort{ $list->{themes}->{$a}->{theme} cmp $list->{themes}->{$b}->{theme} }( keys( %{ $list->{themes} } ) ) ){
+            $rtn .= sprintf( $fmt, $list->{channels}->{$channel_id}, $list->{themes}->{$theme_id}->{theme} );
+        }
+    }
+    return $rtn;
+}
+
+sub list_titles{
+    my $list = shift;
+    # Find length of longest channel name
+    my $max_channel = length( 'Channel' );
+    foreach( keys( %{ $list->{channels} } ) ){
+        if( ! $max_channel || length( $list->{channels}->{$_} ) > $max_channel ){
+            $max_channel = length( $list->{channels}->{$_} );
+        }
+    }
+
+    # Find length of longest theme
+    my $max_theme = length( 'Theme' );
+    foreach( keys( %{ $list->{themes} } ) ){
+        if( ! $max_theme || length( $list->{themes}->{$_}->{theme} ) > $max_theme ){
+            $max_theme = length( $list->{themes}->{$_}->{theme} );
+        }
+    }
+
+    my $fmt =  ( ' ' x 4 ) . '%-4s || %-' . $max_channel . "s || %-" . $max_theme . "s || %s\n";
+    my $rtn = sprintf( $fmt, 'ID', 'Channel', 'Theme', 'Title' );
+    $rtn .= sprintf( $fmt, '==', '=======', '=====', '=====' );
+    foreach my $channel_id ( sort{ $list->{channels}->{$a} cmp $list->{channels}->{$b} }( keys( %{ $list->{channels} } ) ) ){
+        foreach my $theme_id ( sort{ $list->{themes}->{$a}->{theme} cmp $list->{themes}->{$b}->{theme} }( keys( %{ $list->{themes} } ) ) ){
+            if( $list->{themes}->{$theme_id}->{channel_id} eq $channel_id ){
+                foreach my $media_id ( sort{ $list->{media}->{$a}->{title} cmp $list->{media}->{$b}->{title} }( keys( %{ $list->{media} } ) ) ){
+                    if( $list->{media}->{$media_id}->{theme_id} eq $theme_id ){
+                        $rtn .= sprintf( $fmt, $media_id, $list->{channels}->{$channel_id}, $list->{themes}->{$theme_id}->{theme}, $list->{media}->{$media_id}->{title} );
+                    }
+                }
+            }
+        }
+    }
+    return $rtn;
+}
+
+
 
 sub usage{
     print qq{Usage:
@@ -209,6 +264,9 @@ Optional options
   --socks        Socks proxy to use for flvstreamer
   --config       Load settings from a config file:
                  you can put all the options listed here in a config file!
+  --tries        The number of tries Video::Flvstreamer should make per video
+                 There are often interruptions during a download, so a high number
+                 like 50 is pretty safe.  Default is 10
   --help         Print this help out
 
 Action options:
@@ -225,6 +283,9 @@ Search options:
   --channel     Limit action to this channel
   --theme       Limit action to this theme
   --title       Limit action to this title
+  --id          Limit action to the media entry with this id
+  Search options can be explicit: Arte.DE
+  or contain wildcards: "Doku*"
 };
 
 }
