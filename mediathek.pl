@@ -12,9 +12,6 @@ use Data::Dumper;
 $SIG{'INT'} = 'cleanup';
 $SIG{'QUIT'} = 'cleanup';
 
-my $mu = Memory::Usage->new();
-$mu->record( "Starting application at " . localtime() );
-
 my $args = {};
 my $result = GetOptions ( 'agent=s'       => \$args->{agent},
                           'cache_dir=s'   => \$args->{cache_dir},
@@ -86,10 +83,7 @@ my $logger = Log::Log4perl->get_logger();
 $logger->debug( "Args:\n" . Dump( $args ) );
 
 # Pass the memory usage monitor to Mediathek
-$args->{mu} = $mu;
-$mu->record( "Before initialising Mediathek" );
 my $media = Mediathek->new( $args );
-$mu->record( "After initialising Mediathek" );
 
 if( $args->{action} ){
     if( $args->{action} eq 'refresh_media' ){
@@ -121,8 +115,6 @@ if( $args->{action} ){
 }
 
 $logger->debug( "Just before natural exit" );
-$mu->report( "Just before natural exit" );
-dump_memory_report();
 
 exit( 0 );
 
@@ -133,22 +125,7 @@ sub get_log_filename{
 sub cleanup{
     my( $sig ) = @_;
     $logger->warn( "Caught a SIG$sig--shutting down" );
-    $mu->report( "Killed with sig $sig" );
-    dump_memory_report();
     exit( 0 );
-}
-
-sub dump_memory_report{
-    # Write the memory report to file
-    my $f = File::Util->new();
-    my $memory_report_file = $args->{cache_dir} . $f->SL() . 'memory_report.log';
-    if( open( FH, ">$memory_report_file" ) ){
-        print FH $mu->report();
-        close FH;
-        $logger->info( "Wrote memory report to $memory_report_file" );
-    }else{
-        warn( "Couldn't write the memory usage report: $!" );
-    }
 }
 
 sub list{

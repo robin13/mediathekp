@@ -14,7 +14,6 @@ use Log::Log4perl;
 
 use Data::Dumper;
 use Class::Date qw/date/;
-use Memory::Usage;
 use Format::Human::Bytes;
 
 use IO::Uncompress::Unzip qw(unzip $UnzipError) ;
@@ -47,17 +46,13 @@ sub new{
 
     $self->{mech} = $mech;
 
-    foreach( qw/cookie_jar flvstreamer cache_time target_dir mu sqlite_cache_size/ ){
+    foreach( qw/cookie_jar flvstreamer cache_time target_dir sqlite_cache_size/ ){
         if( $args->{$_} ){
             $self->{$_} = $args->{$_};
         }
     }
 
     # Some defaults
-    if( ! $self->{mu} ){
-        $self->{logger}->warn( "MU not passed to Mediathek - initialising!" );
-        $self->{mu} = Memory::Usage->new();
-    }
 
     $self->{flvstreamer} ||= 'flvstreamer';
     $self->{cache_time}  ||= 3600;
@@ -107,16 +102,12 @@ sub new{
     $self->{dbh} = $dbh;
     $self->{logger}->debug( "Cache files:\n" . Dump( $self->{cache_files} ) );
 
-    $self->{mu}->record( "New " . __PACKAGE__ . " initialised" );
-
     return $self;
 
 }
 
 sub refresh_sources{
     my( $self ) = @_;
-    $self->{mu}->record( __PACKAGE__ . "->refresh_sources start" );
-
     my $f = File::Util->new();
 
 
@@ -152,16 +143,12 @@ sub refresh_sources{
     $sql = 'INSERT INTO sources ( url, time, tried ) VALUES( ?, ?, 0 )';
     $sth = $self->{dbh}->prepare( $sql );
     $t->{mediathek_sth} = $sth;
-    $t->{mediathek_mu} = $self->{mu};
 
     $self->{logger}->debug( "Parsing source XML: $self->{cache_files}->{sources}" );
-    $self->{mu}->record( __PACKAGE__ . "->refresh_sources before parse xml" );
     $t->parsefile( $self->{cache_files}->{sources} );
-    $self->{mu}->record( __PACKAGE__ . "->refresh_sources after parse xml" );
     $self->{logger}->debug( "Finished parsing source XML" );
     $t->purge;
     $sth->finish;
-    $self->{mu}->record( __PACKAGE__ . "->refresh_sources end" );
 }
 
 sub source_to_db{
@@ -183,8 +170,6 @@ sub source_to_db{
 
 sub refresh_media{
     my( $self ) = @_;
-
-    $self->{mu}->record( __PACKAGE__ . "->refresh_media start" );
 
     $self->refresh_sources();
 
@@ -279,12 +264,9 @@ sub refresh_media{
     $t->{mediathek_sths} = $sths;
     $t->{mediathek_logger} = $self->{logger};
     $t->{mediathek_count_inserts} = 0;
-    $t->{mediathek_mu} = $self->{mu};
 
     $self->{logger}->debug( "Parsing media XML: $self->{cache_files}->{media}" );
-    $self->{mu}->record( __PACKAGE__ . "->refresh_media before parse xml" );
     $t->parsefile( $self->{cache_files}->{media} );
-    $self->{mu}->record( __PACKAGE__ . "->refresh_media after parse xml" );
     $self->{logger}->debug( "Finished parsing media XML" );
     $t->purge;
 
@@ -296,9 +278,7 @@ sub refresh_media{
     $t->{mediathek_sths} = undef;
     $t->{mediathek_logger} = undef;
     $t->{mediathek_count_inserts} = undef;
-    $t->{mediathek_mu} = undef;
 
-    $self->{mu}->record( __PACKAGE__ . "->refresh_media end" );
     $self->{logger}->debug( __PACKAGE__ . "->refresh_media end" );
 }
 
@@ -356,10 +336,6 @@ sub media_to_db{
     # And lastly add the mapping
     $sths->{ins_map_media}->execute( $media_id, $theme_id );
 
-    $t->{mediathek_count_inserts}++;
-    if( $t->{mediathek_count_inserts} % 100 == 0 ){
-        $t->{mediathek_mu}->record( "inserted $t->{mediathek_count_inserts} into media" );
-    }
     $section->purge;
 }
 
@@ -576,9 +552,5 @@ sub init_db{
     $dbh->disconnect;
 }
 
-sub mu{
-    my( $self ) = @_;
-    return $self->{mu};
-}
 
 1;
