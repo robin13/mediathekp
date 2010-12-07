@@ -15,6 +15,7 @@ use Log::Log4perl;
 use Data::Dumper;
 use Class::Date qw/date/;
 use Format::Human::Bytes;
+use Lingua::DE::ASCII;
 
 use IO::Uncompress::Unzip qw(unzip $UnzipError) ;
 
@@ -473,8 +474,8 @@ sub get_videos{
 
     foreach( sort( keys( %{ $list->{media} } ) ) ){
         my $video = $list->{media}->{$_};
-        my $theme = $list->{themes}->{ $video->{theme_id} }->{theme};
-        my $channel = $list->{channels}->{ $list->{themes}->{ $video->{theme_id} }->{channel_id} };
+        my $theme = to_ascii( $list->{themes}->{ $video->{theme_id} }->{theme} );
+        my $channel = to_ascii( $list->{channels}->{ $list->{themes}->{ $video->{theme_id} }->{channel_id} } );
         my $target_dir = catfile( $self->{target_dir}, $channel, $theme );
         $self->{logger}->debug( "Target dir: $target_dir" );
         if( ! -d $target_dir ){
@@ -482,7 +483,12 @@ sub get_videos{
                 die( "Could not make target dir: $target_dir" );
             }
         }
-        my $target_path = catfile( $target_dir, $video->{title} . '.avi' );
+        my $title = to_ascii( $video->{title} );
+        #TODO: find a module which replaces all bad-in-filename characters
+        $title =~ s/\(/_/g;
+        $title =~ s/\)/_/g;
+        $title =~ s/\//_/g;
+        my $target_path = catfile( $target_dir, $title . '.avi' );
         $target_dir =~ s/\W/_/g;
         $self->{logger}->info( sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
         if( ! $args->{test} ){
