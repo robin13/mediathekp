@@ -491,8 +491,9 @@ sub get_videos{
         $title =~ s/\(/_/g;
         $title =~ s/\)/_/g;
         $title =~ s/\//_/g;
+        $title =~ s/\W/_/g;
         my $target_path = catfile( $target_dir, $title . '.avi' );
-        $target_dir =~ s/\W/_/g;
+        $target_path =~ s/\s/_/g;
         $self->{logger}->info( sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
         if( ! $args->{test} ){
             $self->{flv}->get_raw( $video->{url}, $target_path );
