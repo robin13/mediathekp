@@ -50,6 +50,15 @@ CREATE TABLE map_media(
 CREATE INDEX map_media_mediaid_index ON map_media( media_id );
 CREATE INDEX map_media_themeid_index ON map_media( theme_id );
 
+DROP TABLE IF EXISTS downloads;
+CREATE TABLE downloads(
+    `abo_id` INTEGER,
+    `path` TEXT UNIQUE NOT NULL,
+    `url` TEXT UNIQUE NOT NULL,
+    `time` DATETIME NOT NULL,
+    `expired` BINARY DEFAULT 0
+);
+CREATE INDEX downloads_path_index ON downloads ( path );
 
 DROP TABLE IF EXISTS sources;
 CREATE TABLE sources(

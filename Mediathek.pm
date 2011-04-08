@@ -471,6 +471,9 @@ sub get_videos{
     }
 
     $self->{logger}->info( "Found " . scalar( keys( %{ $list->{media} } ) ) . " videos to download" );
+    
+    my $sth = $self->{dbh}->prepare( 'INSERT INTO downloads ( abo_id, path, url, time ) '.
+        'VALUES( ?, ?, ?, ? )' );
 
     foreach( sort( keys( %{ $list->{media} } ) ) ){
         my $video = $list->{media}->{$_};
@@ -493,6 +496,11 @@ sub get_videos{
         $self->{logger}->info( sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
         if( ! $args->{test} ){
             $self->{flv}->get_raw( $video->{url}, $target_path );
+            if( -e $target_path ){
+                $sth->execute( -1, $target_path, $video->{url}, date(time) );
+            }else{ 
+                $self->{logger}->info("Could not download %s", $video->{title} );
+            }
         }
     }
 }
