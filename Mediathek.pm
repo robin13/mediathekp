@@ -480,6 +480,7 @@ sub get_videos{
         my $theme = to_ascii( $list->{themes}->{ $video->{theme_id} }->{theme} );
         my $channel = to_ascii( $list->{channels}->{ $list->{themes}->{ $video->{theme_id} }->{channel_id} } );
         my $target_dir = catfile( $self->{target_dir}, $channel, $theme );
+        $target_dir =~ s/\s/_/g;
         $self->{logger}->debug( "Target dir: $target_dir" );
         if( ! -d $target_dir ){
             if( ! $self->{f}->make_dir( $target_dir ) ){
@@ -493,14 +494,23 @@ sub get_videos{
         $title =~ s/\//_/g;
         $title =~ s/\W/_/g;
         my $target_path = catfile( $target_dir, $title . '.avi' );
-        $target_path =~ s/\s/_/g;
-        $self->{logger}->info( sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
-        if( ! $args->{test} ){
-            $self->{flv}->get_raw( $video->{url}, $target_path );
+        if( -e $target_path ){
+            $self->{logger}->info( sprintf( "Media already downloaded: %s", $target_path ) );
+        }elsif( ! $args->{test} ){
+            $self->{logger}->info( sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
+            if( $video->{url} =~ /^http/ ){
+                my @args = ( "/usr/bin/mplayer", "-playlist", to_ascii($video->{url}), 
+                    "-dumpstream", "-dumpfile", $target_path );
+                $self->{logger}->debug( sprintf( "Running: %s", "@args" ) );
+                system( @args ) == 0 or $self->{logger}->warn( sprintf( "%s", $! ) );
+            }else{
+                $self->{flv}->get_raw( $video->{url}, $target_path );
+            }
+            
             if( -e $target_path ){
                 $sth->execute( -1, $target_path, $video->{url}, date(time) );
             }else{ 
-                $self->{logger}->info("Could not download %s", $video->{title} );
+                $self->{logger}->info( sprintf( "Could not download %s", $video->{title} ) );
             }
         }
     }
