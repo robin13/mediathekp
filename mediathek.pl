@@ -246,12 +246,12 @@ Optional options
                  like 50 is pretty safe.  Default is 10
   --help         Print this help out
 
-Action options:
-  --count          Count number of videos matching your search
-  --list           List the videos matching your search
-  --download       Download the videos matching your search
-  --refresh_media  Refresh your database from the internet
-  --init_db        (re)initialise your database (!!delete everything in DB!!)
+Action options (--action ACTION):
+  count          Count number of videos matching your search
+  list           List the videos matching your search
+  download       Download the videos matching your search
+  refresh_media  Refresh your database from the internet
+  init_db        (re)initialise your database (!!delete everything in DB!!)
 
 Search options:
       One or more search options can be given
