@@ -34,7 +34,8 @@ my $result = GetOptions ( 'agent=s'       => \$args->{agent},
                         # Required for downloading
                           'target_dir=s'  => \$args->{target_dir},
 
-                        # Actions: refresh_media, download, count, list
+                        # Actions: refresh_media, download, count, list, 
+                        # add_abo, del_abo, run_abo, list_abos
                           'action=s'      => \$args->{action},
 
                         # Help
@@ -109,6 +110,14 @@ if( $args->{action} ){
         print list( $media );
     }elsif( $args->{action} eq 'init_db' ){
         $media->init_db();
+    }elsif( $args->{action} =~ /^add_abo,\w+,\d/ ){
+    
+    }elsif( $args->{action} =~ /^del_abo,\d+/ ){
+
+    }elsif( $args->{action} =~ /^run_abo,\w+/ ){
+
+    }elsif( $args->{action} eq 'list_abos' ){
+
     }else{
         die( "Unknown action: $args->{action}" );
     }

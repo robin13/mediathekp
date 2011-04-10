@@ -58,7 +58,19 @@ CREATE TABLE downloads(
     `time` DATETIME NOT NULL,
     `expired` BINARY DEFAULT 0
 );
-CREATE INDEX downloads_path_index ON downloads ( path );
+CREATE INDEX downloads_abo_id_index ON downloads( abo_id );
+CREATE INDEX downloads_path_index ON downloads( path );
+
+DROP TABLE IF EXISTS abos;
+CREATE TABLE abos(
+    `abo_id` INTEGER PRIMARY KEY,
+    `name` TEXT UNIQUE NOT NULL,
+    `channel` TEXT,
+    `theme` TEXT,
+    `title` TEXT,
+    `expires_after` INTEGER DEFAULT 0
+);
+CREATE INDEX abos_name_index ON abos( name );
 
 DROP TABLE IF EXISTS sources;
 CREATE TABLE sources(
