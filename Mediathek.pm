@@ -514,31 +514,35 @@ sub get_videos{
             }
         }
     }
+    $sth->finish();
 }
 
 sub add_abo{
     my( $self, $args ) = @_;
     
     if( !$args->{channel} && !$args->{theme} && !$args->{title} ){
-        die( "Abo will download all media. Please specify a filter.\n");
+        die( "Abo would download all media. Please specify a filter.\n");
     }
-    my $sth = $self->{dbh}->prepare( 'INSERT INTO abos ( name, channel, theme, ' .
-        'title, expires_after) VALUES( ?, ?, ?, ?, ? )' );
-    $sth->execute( $args->{name}, $args->{channel}, $args->{theme}, 
-        $args->{title}, $args->{expires} ) or die( "Abo not added.\n" );
-        
+    my $channel = $args->{channel} || "";
+    my $theme = $args->{theme} || "";
+    my $title = $args->{title} || "";
+    $self->{dbh}->do( "INSERT INTO abos ( name, channel, theme, " .
+        "title, expires_after) VALUES( '$args->{name}', '$channel', " .
+        "'$theme', '$title', $args->{expires} )" ) or die( "Abo not added.\n" );     
     $self->{logger}->info( "Abo successfully added.\n" );
 }
 
 sub del_abo{
     my( $self, $args ) = @_;
     
-    my $sth = $self->{dbh}->prepare( 'DELETE FROM abos WHERE name=?' );
-    $sth->execute( $args->{name} ) or die( "Abo not deleted\n" );
-    
+    $self->{dbh}->do( "DELETE FROM abos WHERE name='$args->{name}'" )
+        or die( "Abo not deleted\n" );
     $self->{logger}->info( "Abo successfully deleted\n" );
 }
 
+sub list_abos{
+    my $self = @_;
+}
 
 sub get_url_to_file{
     my( $self, $url, $filename ) = @_;
