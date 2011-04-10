@@ -525,7 +525,18 @@ sub add_abo{
     my $sth = $self->{dbh}->prepare( 'INSERT INTO abos ( name, channel, theme, ' .
         'title, expires_after) VALUES( ?, ?, ?, ?, ? )' );
     $sth->execute( $args->{name}, $args->{channel}, $args->{theme}, 
-        $args->{title}, $args->{expires} );
+        $args->{title}, $args->{expires} ) or die( "Abo not added.\n" );
+        
+    $self->{logger}->info( "Abo successfully added.\n" );
+}
+
+sub del_abo{
+    my( $self, $args ) = @_;
+    
+    my $sth = $self->{dbh}->prepare( 'DELETE FROM abos WHERE name=?' );
+    $sth->execute( $args->{name} ) or die( "Abo not deleted\n" );
+    
+    $self->{logger}->info( "Abo successfully deleted\n" );
 }
 
 

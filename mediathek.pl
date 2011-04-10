@@ -118,7 +118,7 @@ if( $args->{action} ){
                            title => $args->{title},
                        } );
     }elsif( $args->{action} =~ /^del_abo,(\w+)/ ){
-        print "del_abo: $1\n";
+        $media->del_abo( { name => $1 } );
     }elsif( $args->{action} =~ /^run_abo,(\w+)/ ){
         print "run_abo: $1\n";
     }elsif( $args->{action} eq 'list_abos' ){
