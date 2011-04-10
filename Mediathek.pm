@@ -516,6 +516,18 @@ sub get_videos{
     }
 }
 
+sub add_abo{
+    my( $self, $args ) = @_;
+    
+    if( !$args->{channel} && !$args->{theme} && !$args->{title} ){
+        die( "Abo will download all media. Please specify a filter.\n");
+    }
+    my $sth = $self->{dbh}->prepare( 'INSERT INTO abos ( name, channel, theme, ' .
+        'title, expires_after) VALUES( ?, ?, ?, ?, ? )' );
+    $sth->execute( $args->{name}, $args->{channel}, $args->{theme}, 
+        $args->{title}, $args->{expires} );
+}
+
 
 sub get_url_to_file{
     my( $self, $url, $filename ) = @_;

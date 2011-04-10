@@ -110,14 +110,19 @@ if( $args->{action} ){
         print list( $media );
     }elsif( $args->{action} eq 'init_db' ){
         $media->init_db();
-    }elsif( $args->{action} =~ /^add_abo,\w+,\d/ ){
-    
-    }elsif( $args->{action} =~ /^del_abo,\d+/ ){
-
-    }elsif( $args->{action} =~ /^run_abo,\w+/ ){
-
+    }elsif( $args->{action} =~ /^add_abo,(\w+),(\d+)/ ){
+        $media->add_abo( { name => $1,
+                           expires => $2,
+                           channel => $args->{channel},
+                           theme => $args->{theme},
+                           title => $args->{title},
+                       } );
+    }elsif( $args->{action} =~ /^del_abo,(\w+)/ ){
+        print "del_abo: $1\n";
+    }elsif( $args->{action} =~ /^run_abo,(\w+)/ ){
+        print "run_abo: $1\n";
     }elsif( $args->{action} eq 'list_abos' ){
-
+        print "list_abos\n";
     }else{
         die( "Unknown action: $args->{action}" );
     }
