@@ -120,7 +120,7 @@ if( $args->{action} ){
     }elsif( $args->{action} =~ /^del_abo,(\w+)/ ){
         $media->del_abo( { name => $1 } );
     }elsif( $args->{action} =~ /^run_abo,(\w+)/ ){
-        print "run_abo: $1\n";
+        $media->run_abo( { name => $1 } );
     }elsif( $args->{action} eq 'list_abos' ){
         print $media->list_abos();
     }else{

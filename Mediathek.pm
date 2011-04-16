@@ -465,6 +465,7 @@ sub get_videos{
 
     $args->{list_all} = 1;
     my $list = $self->list( $args );
+	my $abo_id = $args->{abo_id} || -1;
 
     if( ! $list->{media} ){
         $self->{logger}->warn( "No videos found matching your search..." );
@@ -494,9 +495,7 @@ sub get_videos{
         $title =~ s/\//_/g;
         $title =~ s/\W/_/g;
         my $target_path = catfile( $target_dir, $title . '.avi' );
-        if( -e $target_path ){
-            $self->{logger}->info( sprintf( "Media already downloaded: %s", $target_path ) );
-        }elsif( ! $args->{test} ){
+        if( $self->requires_download( { path => $target_path } ) && ! $args->{test} ){ 
             $self->{logger}->info( sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
             if( $video->{url} =~ /^http/ ){
                 my @args = ( "/usr/bin/mplayer", "-playlist", to_ascii($video->{url}), 
@@ -508,7 +507,7 @@ sub get_videos{
             }
             
             if( -e $target_path ){
-                $sth->execute( -1, $target_path, $video->{url}, date(time) );
+                $sth->execute( $abo_id, $target_path, $video->{url}, date(time) );
             }else{ 
                 $self->{logger}->info( sprintf( "Could not download %s", $video->{title} ) );
             }
@@ -555,6 +554,61 @@ sub list_abos{
 			print "@{$_}\n";
 		}
 	}
+}
+
+sub run_abo{
+	my( $self, $args ) = @_;
+
+	my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM abos WHERE name='$args->{name}'",
+		{ Slice => {} } ) or die( "An error occured while retrieving abo: $args->{name}" );
+	if( @{$arr_ref} == 0 ){
+		$self->{logger}->info( sprintf( "Abo %s not found.", $args->{name} ) );
+	}
+	else{
+		my $abo = @{$arr_ref}[0];
+		if( $abo->{expires_after} > 0 ){
+			$self->expire_downloads( { abo_id => $abo->{abo_id}, expires => $abo->{expires_after} } ); 
+		}
+		$self->get_videos( { channel => $abo->{channel},
+					  theme => $abo->{theme},
+					  title => $abo->{title},
+					  abo_id => $abo->{abo_id}
+				  } );
+	}
+}
+
+sub expire_downloads{
+	my( $self, $args ) = @_;
+
+	my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM downloads WHERE " . 
+		"abo_id=$args->{abo_id} AND expired=0 ", { Slice => {} } );
+	if( @{$arr_ref} > 0 ){
+		foreach my $download ( @$arr_ref ){
+			my $now = date(time);
+			my $expires_on = date( '$download->{time}' ) + '$download->{expires_after}D';
+			if( $now > $expires_on ){
+				$self->{dbh}->do( "UPDATE downloads SET expired=1 WHERE path='$download->{path}'" );
+				unlink $download->{path}; 
+			}
+		}
+	}
+}
+
+sub requires_download{
+	my ($self, $args ) = @_;
+
+	if( -e $args->{path} ){
+		$self->{logger}->info( sprintf( "Media already downloaded: %s", $args->{path} ) );
+		return 0;
+	}
+
+	my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT expired FROM downloads WHERE " .
+		"path='$args->{path}'" );
+	if( @{$arr_ref} == 0 ){
+		return 1;
+	}
+	my $expired = @{$arr_ref}[0];
+	return @{$expired}[0] ? 0 : 1;
 }
 
 sub get_url_to_file{
