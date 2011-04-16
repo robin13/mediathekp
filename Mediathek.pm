@@ -541,7 +541,20 @@ sub del_abo{
 }
 
 sub list_abos{
-    my $self = @_;
+    my ( $self ) = @_;
+
+	my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT name FROM abos ORDER BY name" )
+		or die( "An error occured while retrieving abos\n" );
+
+	if( @{$arr_ref} == 0 ){
+		print "No abos found\n";
+	}
+	else{
+		print "Abo name\n========\n";
+		for( @{$arr_ref} ){
+			print "@{$_}\n";
+		}
+	}
 }
 
 sub get_url_to_file{
