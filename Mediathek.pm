@@ -523,13 +523,13 @@ sub add_abo{
     if( !$args->{channel} && !$args->{theme} && !$args->{title} ){
         die( "Abo would download all media. Please specify a filter.\n");
     }
-    my $channel = $args->{channel} || "";
-    my $theme = $args->{theme} || "";
-    my $title = $args->{title} || "";
-    $self->{dbh}->do( "INSERT INTO abos ( name, channel, theme, " .
-        "title, expires_after) VALUES( '$args->{name}', '$channel', " .
-        "'$theme', '$title', $args->{expires} )" ) or die( "Abo not added.\n" );     
+  
+	my $sth = $self->{dbh}->prepare( 'INSERT INTO abos ( name, channel, theme, ' .
+        'title, expires_after) VALUES( ?, ?, ?, ?, ? )' );
+	$sth->execute( $args->{name}, $args->{channel}, $args->{theme}, $args->{title},
+		$args->{expires} ) or die( "Abo not added.\n" );     
     $self->{logger}->info( "Abo successfully added.\n" );
+	$sth->finish();
 }
 
 sub del_abo{
