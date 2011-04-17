@@ -527,7 +527,7 @@ sub add_abo{
         'title, expires_after) VALUES( ?, ?, ?, ?, ? )' );
 	$sth->execute( $args->{name}, $args->{channel}, $args->{theme}, $args->{title},
 		$args->{expires} ) or die( "Abo not added.\n" );     
-    $self->{logger}->info( "Abo successfully added.\n" );
+    $self->{logger}->info( "Abo \"$args->{name}\" successfully added." );
 	$sth->finish();
 }
 
@@ -536,7 +536,7 @@ sub del_abo{
     
     $self->{dbh}->do( "DELETE FROM abos WHERE name='$args->{name}'" )
         or die( "Abo not deleted\n" );
-    $self->{logger}->info( "Abo successfully deleted\n" );
+    $self->{logger}->info( "Abo \"$args->{name}\" successfully deleted." );
 }
 
 sub list_abos{
@@ -560,9 +560,9 @@ sub run_abo{
 	my( $self, $args ) = @_;
 
 	my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM abos WHERE name='$args->{name}'",
-		{ Slice => {} } ) or die( "An error occured while retrieving abo: $args->{name}" );
+		{ Slice => {} } ) or die( "An error occured while retrieving abo: $args->{name}\n" );
 	if( @{$arr_ref} == 0 ){
-		$self->{logger}->info( sprintf( "Abo %s not found.", $args->{name} ) );
+		$self->{logger}->info( "Abo \"$args->{name}\" not found." );
 	}
 	else{
 		my $abo = @{$arr_ref}[0];
