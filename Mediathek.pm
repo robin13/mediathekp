@@ -567,8 +567,10 @@ sub run_abo{
 	else{
 		my $abo = @{$arr_ref}[0];
 		if( $abo->{expires_after} > 0 ){
-			$self->expire_downloads( { abo_id => $abo->{abo_id}, expires => $abo->{expires_after} } ); 
+			$self->{logger}->debug( "Abo \"$abo->{name}\" has expiry date. Checking expired downloads..." );
+			$self->expire_downloads( { abo_id => $abo->{abo_id}, expires_after => $abo->{expires_after} } ); 
 		}
+		$self->{logger}->debug( "Abo \"$abo->{name}\" has no expiry date. Proceeding with downloads..." );
 		$self->get_videos( { channel => $abo->{channel},
 					  theme => $abo->{theme},
 					  title => $abo->{title},
@@ -585,12 +587,18 @@ sub expire_downloads{
 	if( @{$arr_ref} > 0 ){
 		foreach my $download ( @$arr_ref ){
 			my $now = date(time);
-			my $expires_on = date( '$download->{time}' ) + '$download->{expires_after}D';
+			my $exp = "$args->{expires_after}D";
+			my $expires_on = date( $download->{time} ) + $exp;
 			if( $now > $expires_on ){
+				$self->{logger}->info( "$download->{path} expired on $expires_on. Deleting." );
 				$self->{dbh}->do( "UPDATE downloads SET expired=1 WHERE path='$download->{path}'" );
 				unlink $download->{path}; 
+			}else{
+				$self->{logger}->debug( "$download->{path} expires on $expires_on. Not deleting." );
 			}
 		}
+	}else{
+		$self->{logger}->debug( "All downloads already expired." );
 	}
 }
 
@@ -598,7 +606,7 @@ sub requires_download{
 	my ($self, $args ) = @_;
 
 	if( -e $args->{path} ){
-		$self->{logger}->info( sprintf( "Media already downloaded: %s", $args->{path} ) );
+		$self->{logger}->info( "Media already downloaded: $args->{path}" );
 		return 0;
 	}
 
@@ -608,7 +616,11 @@ sub requires_download{
 		return 1;
 	}
 	my $expired = @{$arr_ref}[0];
-	return @{$expired}[0] ? 0 : 1;
+	if( @{$expired}[0] == 1 ){
+		$self->{logger}->info( "Media $args->{path} expired. Not downloading." );
+		return 0;
+	}
+	return 1;
 }
 
 sub get_url_to_file{
