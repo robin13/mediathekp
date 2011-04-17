@@ -261,11 +261,19 @@ Optional options
   --help         Print this help out
 
 Action options (--action ACTION):
-  count          Count number of videos matching your search
-  list           List the videos matching your search
-  download       Download the videos matching your search
-  refresh_media  Refresh your database from the internet
-  init_db        (re)initialise your database (!!delete everything in DB!!)
+  count              Count number of videos matching your search
+  list               List the videos matching your search
+  download           Download the videos matching your search
+  add_abo,\$n,\$d      Create a new abo with name \$n that expires after \$d days.
+                     Specify search options (see below) to define the media
+                     belonging to an abo. To keep downloads forever, specify 0 days
+  del_abo,\$n         Delete an abo with name \$n
+  list_abos          Shows all abo names
+  run_abo,\$name      Runs the specified abo, downloading all media that is not
+                     yet in target and that has not expired yet. Checks also
+                     if media has expired and removes it from the target
+  refresh_media      Refresh your database from the internet
+  init_db            (re)initialise your database (!!delete everything in DB!!)
 
 Search options:
       One or more search options can be given
