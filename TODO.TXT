@@ -1,0 +1,29 @@
+TODO:
+
+* unzip of media sometimes fails. Probably depending from where it is downloaded, zip or
+  bzip is retrieved. The latter is not properly unpacked.
+
+* consider have aboname being optional in action runabo; simply run all programmed abos
+
+* implement more reliable mplayer dumping... allow several tries
+
+* implement also show_abo,$name (show db entries and if file exists, when it expires)
+
+* del_abo: have optional to remove also all related media / also, DELETE seems to always succeed,
+  even if the abo does not exist...
+
+* the media tables do not contain the date of the program. Media.xml does but is not dumped into
+  the db. Change that in order to define an abo, in which at most $today - $d days are considered for
+  selecting programs to download. Could also be another search paramter: --recentdays 10
+
+* fix flvstreamer... commandline works with given parameters, but Video::Flvstreamer fails...
+
+* Think about how to have for powerful constraints, not just "*" which translates 
+  into "LIKE", but something compound should be possible, e.g.  --theme "Terra X" --title "!vorschau*"
+
+DONE:
+* add new commands in help
+* add_abo: make prep statement to insert NULL values
+* change prepared statements in add_abo, del_abo in direct do's.
+* fix paths such that they don't contain <space>s
+* check url: if http run mplayer, else flvstreamer
