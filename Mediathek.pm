@@ -17,7 +17,7 @@ use Class::Date qw/date/;
 use Format::Human::Bytes;
 use Lingua::DE::ASCII;
 
-use IO::Uncompress::Unzip qw(unzip $UnzipError) ;
+use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError) ;
 
 use Video::Flvstreamer 0.02;
 
@@ -209,14 +209,14 @@ sub refresh_media{
 
             $self->{logger}->debug( "Getting media from internet: $row->{url} ($row->{time})" );
             $self->get_url_to_file( $row->{url}, $self->{cache_files}->{media_zip} );
-            $self->{logger}->debug( "Zip file is " . 
+            $self->{logger}->debug( "Compressed file is " . 
                                       Format::Human::Bytes::base10( $self->{f}->size( $self->{cache_files}->{media_zip} ) ) );
 
-            $self->{logger}->debug( "Unzipping media..." );
+            $self->{logger}->debug( "Uncompressing media..." );
             my $media_xml;
-            # Unzip the file to an the XML string
-            if( ! unzip( $self->{cache_files}->{media_zip} => $self->{cache_files}->{media}, Name => ".filme" ) ){
-                $self->{logger}->warn( $UnzipError );
+            # Uncompress the file to an the XML string
+            if( ! anyuncompress $self->{cache_files}->{media_zip} => $self->{cache_files}->{media} ){
+                $self->{logger}->warn( $AnyUncompressError );
                 $sth_update->execute( $row->{url} );
                 next MEDIA_SOURCE;
             }

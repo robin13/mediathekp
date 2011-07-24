@@ -1,7 +1,7 @@
 TODO:
 
-* unzip of media sometimes fails. Probably depending from where it is downloaded, zip or
-  bzip is retrieved. The latter is not properly unpacked.
+* add possibility to VACUUM the db, as it seems to slow down or even completely fail the
+  refresh_media action
 
 * consider have aboname being optional in action runabo; simply run all programmed abos
 
@@ -22,6 +22,7 @@ TODO:
   into "LIKE", but something compound should be possible, e.g.  --theme "Terra X" --title "!vorschau*"
 
 DONE:
+* using IO::Uncompress::AnyUncompress to unzip/bunzip2 media file 
 * add new commands in help
 * add_abo: make prep statement to insert NULL values
 * change prepared statements in add_abo, del_abo in direct do's.
