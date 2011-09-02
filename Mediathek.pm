@@ -19,7 +19,7 @@ use Lingua::DE::ASCII;
 
 use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError) ;
 
-use Video::Flvstreamer 0.02;
+use Video::Flvstreamer 0.03;
 
 sub new{
     my( $class, $args ) = @_;
