@@ -503,7 +503,13 @@ sub get_videos{
                 $self->{logger}->debug( sprintf( "Running: %s", "@args" ) );
                 system( @args ) == 0 or $self->{logger}->warn( sprintf( "%s", $! ) );
             }else{
-                $self->{flv}->get_raw( $video->{url}, $target_path );
+                # Sometimes the url is not just a url, it's a whole load of arguments tailored for a flvstreamer
+                # download.
+                # e.g. --host vod.daserste.de --app ardfs/ --playpath mp4:videoportal/mediathek/W+wie+Wissen/c_150000/156934/format168877.f4v --resume -q -o /tmp/mediathek_target/ARD/W_wie_Wissen/Erblindung_durch_Parasiten_Infektion.avi
+                # These have to be passed as individual arguments, otherwise flvstreamer will receive the whole
+                # string as one argument and will not be able to parse it.
+                my @video_args = split( ' ', $video->{url} );
+                $self->{flv}->get_raw( \@video_args, $target_path );
             }
             
             if( -e $target_path ){
