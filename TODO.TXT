@@ -27,6 +27,8 @@ TODO:
 * Think about how to have for powerful constraints, not just "*" which translates 
   into "LIKE", but something compound should be possible, e.g.  --theme "Terra X" --title "!vorschau*"
 
+* Change module layout.  Use Module::Starter to create typical structure with Makefile.PL and a manifest.
+
 DONE:
 * using IO::Uncompress::AnyUncompress to unzip/bunzip2 media file 
 * add new commands in help
