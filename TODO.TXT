@@ -1,5 +1,11 @@
 TODO:
 
+* implement list downloaded media (those that are not expired, i.e. still in the
+  target folder)
+
+* implement delete downloaded media (delete from target folder and mark as expired
+  in db)
+
 * add possibility to VACUUM the db, as it seems to slow down or even completely fail the
   refresh_media action
 
