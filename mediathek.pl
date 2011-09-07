@@ -13,34 +13,36 @@ $SIG{'INT'} = 'cleanup';
 $SIG{'QUIT'} = 'cleanup';
 
 my $args = {};
-my $result = GetOptions ( 'agent=s'       => \$args->{agent},
-                          'cache_dir=s'   => \$args->{cache_dir},
-                          'cache_time=i'  => \$args->{cache_time},
-                          'cookie_jar=s'  => \$args->{cookie_jar},
-                          'timeout=i'     => \$args->{timeout},
-                          'flvstreamer=s' => \$args->{flvstreamer},
-                          'proxy=s'       => \$args->{proxy},
-                          'socks=s'       => \$args->{socks},
-                          'config=s'      => \$args->{config},
-                          'test'          => \$args->{test},
-                          'tries=i'       => \$args->{tries},
+my $result = GetOptions ( 
+    $args,
+    'agent=s'
+    'cache_dir=s'
+    'cache_time=i'
+    'cookie_jar=s'
+    'timeout=i'
+    'flvstreamer=s'
+    'proxy=s'
+    'socks=s'
+    'config=s'
+    'test'
+    'tries=i'
 
-                        # Filters
-                          'channel=s'     => \$args->{channel},
-                          'theme=s'       => \$args->{theme},
-                          'title=s'       => \$args->{title},
-                          'id=i'          => \$args->{id},
+    # Filters
+    'channel=s'
+    'theme=s'
+    'title=s'
+    'id=i'
 
-                        # Required for downloading
-                          'target_dir=s'  => \$args->{target_dir},
+    # Required for downloading
+    'target_dir=s'
 
-                        # Actions: refresh_media, download, count, list, 
-                        # add_abo, del_abo, run_abo, list_abos
-                          'action=s'      => \$args->{action},
+    # Actions: refresh_media, download, count, list, 
+    # add_abo, del_abo, run_abo, list_abos
+    'action=s'
 
-                        # Help
-                          'help'          => \$args->{help},
-                          );
+    # Help
+    'help'
+    );
 
 
 if( ! $result ){
@@ -123,6 +125,8 @@ if( $args->{action} ){
         $media->run_abo( { name => $1 } );
     }elsif( $args->{action} eq 'list_abos' ){
         print $media->list_abos();
+    }elsif( $args->{action} eq 'list_downloads' ){
+        print list_downloads( $media );
     }else{
         die( "Unknown action: $args->{action}" );
     }
@@ -233,6 +237,30 @@ sub list_titles{
     return $rtn;
 }
 
+sub list_downloads{
+    my( $media ) = @_;
+    my $list = $media->get_downloaded_media();
+
+    # find length of longest abo name
+    my $max_abo = length( 'Abo' );
+    foreach my $download (@$list){
+        my $name_length = length( $download->{name} ) || 0;
+        if( $name_length > $max_abo ){
+            $max_abo = $name_length;
+        }
+    }
+
+    my $fmt = ( ' ' x 4 ) . '%-5s || %-' . $max_abo . "s || %-19s || %s\n";
+    my $rtn = sprintf( $fmt, 'ID', 'Abo', 'Download time', 'Path' );
+    $rtn .= sprintf( $fmt, '==', '===', '===================', '=====================' );
+    foreach my $row ( @$list ) {
+        $rtn .= sprintf( $fmt, $row->{media_id}, $row->{name} || "N/A", $row->{time}, $row->{path} );
+    }
+
+    $rtn .= "\n" . scalar(@$list) . " downloaded videos.\n\n";
+
+    return $rtn;
+}
 
 
 sub usage{
@@ -263,6 +291,7 @@ Optional options
 Action options (--action ACTION):
   count              Count number of videos matching your search
   list               List the videos matching your search
+  list_downloads     List the videos previously downloaded
   download           Download the videos matching your search
   add_abo,\$n,\$d      Create a new abo with name \$n that expires after \$d days.
                      Specify search options (see below) to define the media

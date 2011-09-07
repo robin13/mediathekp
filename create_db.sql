@@ -53,6 +53,7 @@ CREATE INDEX map_media_themeid_index ON map_media( theme_id );
 DROP TABLE IF EXISTS downloads;
 CREATE TABLE downloads(
     `abo_id` INTEGER,
+    `media_id` INTEGER NOT NULL,
     `path` TEXT UNIQUE NOT NULL,
     `url` TEXT UNIQUE NOT NULL,
     `time` DATETIME NOT NULL,

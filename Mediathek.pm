@@ -473,11 +473,11 @@ sub get_videos{
 
     $self->{logger}->info( "Found " . scalar( keys( %{ $list->{media} } ) ) . " videos to download" );
     
-    my $sth = $self->{dbh}->prepare( 'INSERT INTO downloads ( abo_id, path, url, time ) '.
-        'VALUES( ?, ?, ?, ? )' );
+    my $sth = $self->{dbh}->prepare( 'INSERT INTO downloads ( abo_id, media_id, path, url, time ) '.
+        'VALUES( ?, ?, ?, ?, ? )' );
 
-    foreach( sort( keys( %{ $list->{media} } ) ) ){
-        my $video = $list->{media}->{$_};
+    foreach my $media_id ( sort( keys( %{ $list->{media} } ) ) ){
+        my $video = $list->{media}->{$media_id};
         my $theme = to_ascii( $list->{themes}->{ $video->{theme_id} }->{theme} );
         my $channel = to_ascii( $list->{channels}->{ $list->{themes}->{ $video->{theme_id} }->{channel_id} } );
         my $target_dir = catfile( $self->{target_dir}, $channel, $theme );
@@ -513,7 +513,7 @@ sub get_videos{
             }
             
             if( -e $target_path ){
-                $sth->execute( $abo_id, $target_path, $video->{url}, date(time) );
+                $sth->execute( $abo_id, $media_id, $target_path, $video->{url}, date(time) );
             }else{ 
                 $self->{logger}->info( sprintf( "Could not download %s", $video->{title} ) );
             }
@@ -539,7 +539,7 @@ sub add_abo{
 
 sub del_abo{
     my( $self, $args ) = @_;
-    
+
     $self->{dbh}->do( "DELETE FROM abos WHERE name='$args->{name}'" )
         or die( "Abo not deleted\n" );
     $self->{logger}->info( "Abo \"$args->{name}\" successfully deleted." );
@@ -548,85 +548,101 @@ sub del_abo{
 sub list_abos{
     my ( $self ) = @_;
 
-	my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT name FROM abos ORDER BY name" )
-		or die( "An error occured while retrieving abos\n" );
+    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT name FROM abos ORDER BY name" )
+        or die( "An error occurred while retrieving abos\n" );
 
-	if( @{$arr_ref} == 0 ){
-		print "No abos found\n";
-	}
-	else{
-		print "Abo name\n========\n";
-		for( @{$arr_ref} ){
-			print "@{$_}\n";
-		}
-	}
+    if( @{$arr_ref} == 0 ){
+        print "No abos found\n";
+    }
+    else{
+        print "Abo name\n========\n";
+        for( @{$arr_ref} ){
+            print "@{$_}\n";
+        }
+    }
 }
 
 sub run_abo{
-	my( $self, $args ) = @_;
+    my( $self, $args ) = @_;
 
-	my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM abos WHERE name='$args->{name}'",
-		{ Slice => {} } ) or die( "An error occured while retrieving abo: $args->{name}\n" );
-	if( @{$arr_ref} == 0 ){
-		$self->{logger}->info( "Abo \"$args->{name}\" not found." );
-	}
-	else{
-		my $abo = @{$arr_ref}[0];
-		if( $abo->{expires_after} > 0 ){
-			$self->{logger}->debug( "Abo \"$abo->{name}\" has expiry date. Checking expired downloads..." );
-			$self->expire_downloads( { abo_id => $abo->{abo_id}, expires_after => $abo->{expires_after} } ); 
-		}
-		$self->{logger}->debug( "Abo \"$abo->{name}\" has no expiry date. Proceeding with downloads..." );
-		$self->get_videos( { channel => $abo->{channel},
-					  theme => $abo->{theme},
-					  title => $abo->{title},
-					  abo_id => $abo->{abo_id}
-				  } );
-	}
+    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM abos WHERE name='$args->{name}'",
+        { Slice => {} } ) or die( "An error occurred while retrieving abo: $args->{name}\n" );
+    if( @{$arr_ref} == 0 ){
+        $self->{logger}->info( "Abo \"$args->{name}\" not found." );
+    }
+    else{
+        my $abo = @{$arr_ref}[0];
+        if( $abo->{expires_after} > 0 ){
+            $self->{logger}->debug( "Abo \"$abo->{name}\" has expiry date. Checking expired downloads..." );
+            $self->expire_downloads( { abo_id => $abo->{abo_id}, expires_after => $abo->{expires_after} } ); 
+        }
+        $self->{logger}->debug( "Abo \"$abo->{name}\" has no expiry date. Proceeding with downloads..." );
+        $self->get_videos( {
+            channel => $abo->{channel},
+            theme   => $abo->{theme},
+            title   => $abo->{title},
+            abo_id  => $abo->{abo_id}
+            } );
+    }
+}
+
+sub get_downloaded_media{
+    my ( $self ) = @_;
+
+    my $sql = "SELECT abos.name, downloads.media_id, downloads.path, downloads.time "
+    . "FROM downloads LEFT OUTER JOIN abos ON abos.abo_id=downloads.abo_id WHERE "
+    . "downloads.expired=0 ORDER BY downloads.time";
+
+    $self->{logger}->debug( "SQL: $sql" );
+
+    my @result = @{ $self->{dbh}->selectall_arrayref( $sql, { Slice => {} }) 
+        or die( "Could not fetch downloads" )};
+
+    return \@result;
 }
 
 sub expire_downloads{
-	my( $self, $args ) = @_;
+    my( $self, $args ) = @_;
 
-	my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM downloads WHERE " . 
-		"abo_id=$args->{abo_id} AND expired=0 ", { Slice => {} } );
-	if( @{$arr_ref} > 0 ){
-		foreach my $download ( @$arr_ref ){
-			my $now = date(time);
-			my $exp = "$args->{expires_after}D";
-			my $expires_on = date( $download->{time} ) + $exp;
-			if( $now > $expires_on ){
-				$self->{logger}->info( "$download->{path} expired on $expires_on. Deleting." );
-				$self->{dbh}->do( "UPDATE downloads SET expired=1 WHERE path='$download->{path}'" );
-				unlink $download->{path}; 
-			}else{
-				$self->{logger}->debug( "$download->{path} expires on $expires_on. Not deleting." );
-			}
-		}
-	}else{
-		$self->{logger}->debug( "All downloads already expired." );
-	}
+    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM downloads WHERE " . 
+        "abo_id=$args->{abo_id} AND expired=0 ", { Slice => {} } );
+    if( @{$arr_ref} > 0 ){
+        foreach my $download ( @$arr_ref ){
+            my $now = date(time);
+            my $exp = "$args->{expires_after}D";
+            my $expires_on = date( $download->{time} ) + $exp;
+            if( $now > $expires_on ){
+                $self->{logger}->info( "$download->{path} expired on $expires_on. Deleting." );
+                $self->{dbh}->do( "UPDATE downloads SET expired=1 WHERE path='$download->{path}'" );
+                unlink $download->{path}; 
+            }else{
+                $self->{logger}->debug( "$download->{path} expires on $expires_on. Not deleting." );
+            }
+        }
+    }else{
+        $self->{logger}->debug( "All downloads already expired." );
+    }
 }
 
 sub requires_download{
-	my ($self, $args ) = @_;
+    my ($self, $args ) = @_;
 
-	if( -e $args->{path} ){
-		$self->{logger}->info( "Media already downloaded: $args->{path}" );
-		return 0;
-	}
+    if( -e $args->{path} ){
+        $self->{logger}->info( "Media already downloaded: $args->{path}" );
+        return 0;
+    }
 
-	my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT expired FROM downloads WHERE " .
-		"path='$args->{path}'" );
-	if( @{$arr_ref} == 0 ){
-		return 1;
-	}
-	my $expired = @{$arr_ref}[0];
-	if( @{$expired}[0] == 1 ){
-		$self->{logger}->info( "Media $args->{path} expired. Not downloading." );
-		return 0;
-	}
-	return 1;
+    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT expired FROM downloads WHERE " .
+        "path='$args->{path}'" );
+    if( @{$arr_ref} == 0 ){
+        return 1;
+    }
+    my $expired = @{$arr_ref}[0];
+    if( @{$expired}[0] == 1 ){
+        $self->{logger}->info( "Media $args->{path} expired. Not downloading." );
+        return 0;
+    }
+    return 1;
 }
 
 sub get_url_to_file{
@@ -671,7 +687,8 @@ sub init_db{
     }
     my $line;
     my $sql;
-  LINE:
+    
+    LINE:
     while( $line = readline( FH ) ){
         if( $line =~ m/^\s*$/ || $line =~ m/^\-\-/ || $line =~ m/^\#/ ){
             next LINE;
