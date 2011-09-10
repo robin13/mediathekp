@@ -15,33 +15,33 @@ $SIG{'QUIT'} = 'cleanup';
 my $args = {};
 my $result = GetOptions ( 
     $args,
-    'agent=s'
-    'cache_dir=s'
-    'cache_time=i'
-    'cookie_jar=s'
-    'timeout=i'
-    'flvstreamer=s'
-    'proxy=s'
-    'socks=s'
-    'config=s'
-    'test'
-    'tries=i'
+    'agent=s',
+    'cache_dir=s',
+    'cache_time=i',
+    'cookie_jar=s',
+    'timeout=i',
+    'flvstreamer=s',
+    'proxy=s',
+    'socks=s',
+    'config=s',
+    'test',
+    'tries=i',
 
     # Filters
-    'channel=s'
-    'theme=s'
-    'title=s'
-    'id=i'
+    'channel=s',
+    'theme=s',
+    'title=s',
+    'id=i',
 
     # Required for downloading
-    'target_dir=s'
+    'target_dir=s',
 
     # Actions: refresh_media, download, count, list, 
     # add_abo, del_abo, run_abo, list_abos
-    'action=s'
+    'action=s',
 
     # Help
-    'help'
+    'help',
     );
 
 
