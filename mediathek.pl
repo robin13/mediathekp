@@ -124,7 +124,7 @@ if( $args->{action} ){
     }elsif( $args->{action} =~ /^run_abo,(\w+)/ ){
         $media->run_abo( { name => $1 } );
     }elsif( $args->{action} eq 'list_abos' ){
-        print $media->list_abos();
+        print list_abos( $media );
     }elsif( $args->{action} eq 'list_downloads' ){
         print list_downloads( $media );
     }elsif( $args->{action} =~ /^del_download,(\d+)/ ){
@@ -236,6 +236,18 @@ sub list_titles{
             }
         }
     }
+    return $rtn;
+}
+
+sub list_abos{
+    my( $media ) = @_;
+    my $list = $media->get_abos();
+
+    my $rtn = "Abo name\n========\n";
+    for( @{$list} ){
+        $rtn .= "@{$_}\n";
+    }
+
     return $rtn;
 }
 

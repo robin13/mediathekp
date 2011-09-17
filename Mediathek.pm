@@ -545,21 +545,13 @@ sub del_abo{
     $self->{logger}->info( "Abo \"$args->{name}\" successfully deleted." );
 }
 
-sub list_abos{
+sub get_abos{
     my ( $self ) = @_;
 
-    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT name FROM abos ORDER BY name" )
-        or die( "An error occurred while retrieving abos\n" );
+    my @result = @{ $self->{dbh}->selectall_arrayref( "SELECT name FROM abos ORDER BY name" )
+        or die( "An error occurred while retrieving abos\n" )};
 
-    if( @{$arr_ref} == 0 ){
-        print "No abos found\n";
-    }
-    else{
-        print "Abo name\n========\n";
-        for( @{$arr_ref} ){
-            print "@{$_}\n";
-        }
-    }
+    return \@result;
 }
 
 sub run_abo{
@@ -589,9 +581,9 @@ sub run_abo{
 sub get_downloaded_media{
     my ( $self ) = @_;
 
-    my $sql = "SELECT abos.name, downloads.media_id, downloads.path, downloads.time "
-    . "FROM downloads LEFT OUTER JOIN abos ON abos.abo_id=downloads.abo_id WHERE "
-    . "downloads.expired=0 ORDER BY downloads.time";
+    my $sql = "SELECT abos.name, downloads.media_id, downloads.path, downloads.time " .
+        "FROM downloads LEFT OUTER JOIN abos ON abos.abo_id=downloads.abo_id WHERE " .
+        "downloads.expired=0 ORDER BY downloads.time";
 
     $self->{logger}->debug( "SQL: $sql" );
 
