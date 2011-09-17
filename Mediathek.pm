@@ -601,6 +601,19 @@ sub get_downloaded_media{
     return \@result;
 }
 
+sub del_downloaded{
+    my ( $self, $args ) = @_;
+
+    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT path FROM downloads WHERE " .
+        "media_id=$args->{id}", { Slice => {} } );
+    if( defined $arr_ref && @{$arr_ref} == 1 ){
+        my $file = ${$arr_ref}[0]->{path};
+        unlink $file or die( "Could not delete file: $file" );
+        $self->{dbh}->do( "DELETE FROM downloads WHERE media_id=$args->{id}" );
+        $self->{logger}->info( "Media \"$file\" successfully deleted." );
+    }
+}
+
 sub expire_downloads{
     my( $self, $args ) = @_;
 

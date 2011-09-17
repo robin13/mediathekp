@@ -127,6 +127,8 @@ if( $args->{action} ){
         print $media->list_abos();
     }elsif( $args->{action} eq 'list_downloads' ){
         print list_downloads( $media );
+    }elsif( $args->{action} =~ /^del_download,(\d+)/ ){
+        $media->del_downloaded( { id => $1 } );
     }else{
         die( "Unknown action: $args->{action}" );
     }
@@ -293,13 +295,14 @@ Action options (--action ACTION):
   list               List the videos matching your search
   list_downloads     List the videos previously downloaded
   download           Download the videos matching your search
+  del_download,\$i    Deletes the video with id \$i from target_dir
   add_abo,\$n,\$d      Create a new abo with name \$n that expires after \$d days.
                      Specify search options (see below) to define the media
                      belonging to an abo. To keep downloads forever, specify 0 days
   del_abo,\$n         Delete an abo with name \$n
   list_abos          Shows all abo names
   run_abo,\$name      Runs the specified abo, downloading all media that is not
-                     yet in target and that has not expired yet. Checks also
+                     yet in target_dir and that has not expired yet. Checks also
                      if media has expired and removes it from the target
   refresh_media      Refresh your database from the internet
   init_db            (re)initialise your database (!!delete everything in DB!!)
