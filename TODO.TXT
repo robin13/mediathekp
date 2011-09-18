@@ -9,8 +9,7 @@ TODO:
 
 * implement also show_abo,$name (show db entries and if file exists, when it expires)
 
-* del_abo: have optional to remove also all related media / also, DELETE seems to always succeed,
-  even if the abo does not exist...
+* del_abo: have optional to remove also all related media 
 
 * the media tables do not contain the date of the program. Media.xml does but is not dumped into
   the db. Change that in order to define an abo, in which at most $today - $d days are considered for
@@ -24,6 +23,7 @@ TODO:
 * Change module layout.  Use Module::Starter to create typical structure with Makefile.PL and a manifest.
 
 DONE:
+* DELETE seems to always succeed, even if the abo does not exist: checking now return value
 * implement delete downloaded media (delete from target folder and from downloads
   in db)
 * implement list downloaded media (those that are not expired, i.e. still in the

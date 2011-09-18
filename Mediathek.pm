@@ -513,9 +513,11 @@ sub get_videos{
             }
             
             if( -e $target_path ){
-                $sth->execute( $abo_id, $media_id, $target_path, $video->{url}, date(time) );
+                if( ! defined $sth->execute( $abo_id, $media_id, $target_path, $video->{url}, date(time) ) ){
+                    $self->{logger}->error( "Could not insert downloaded media: $DBI::errstr" );
+                }
             }else{ 
-                $self->{logger}->info( sprintf( "Could not download %s", $video->{title} ) );
+                $self->{logger}->warn( sprintf( "Could not download %s", $video->{title} ) );
             }
         }
     }
@@ -526,43 +528,54 @@ sub add_abo{
     my( $self, $args ) = @_;
     
     if( !$args->{channel} && !$args->{theme} && !$args->{title} ){
-        die( "Abo would download all media. Please specify a filter.\n");
+        $self->{logger}->warn( "Abo would download all media. Please specify a filter.\n");
+        return undef;
     }
   
-	my $sth = $self->{dbh}->prepare( 'INSERT INTO abos ( name, channel, theme, ' .
+    my $sth = $self->{dbh}->prepare( 'INSERT INTO abos ( name, channel, theme, ' .
         'title, expires_after) VALUES( ?, ?, ?, ?, ? )' );
-	$sth->execute( $args->{name}, $args->{channel}, $args->{theme}, $args->{title},
-		$args->{expires} ) or die( "Abo not added.\n" );     
-    $self->{logger}->info( "Abo \"$args->{name}\" successfully added." );
-	$sth->finish();
+    if( $sth->execute( $args->{name}, $args->{channel}, $args->{theme}, $args->{title}, $args->{expires} ) ){
+        $self->{logger}->info( "Abo \"$args->{name}\" successfully added." );
+    }else{
+        $self->{logger}->error( "Abo not added: $DBI::errstr" );
+    }
+    $sth->finish();
 }
 
 sub del_abo{
     my( $self, $args ) = @_;
 
-    $self->{dbh}->do( "DELETE FROM abos WHERE name='$args->{name}'" )
-        or die( "Abo not deleted\n" );
-    $self->{logger}->info( "Abo \"$args->{name}\" successfully deleted." );
+    my $result = $self->{dbh}->do( "DELETE FROM abos WHERE name='$args->{name}'" );
+    if( $result == 1 ){
+        $self->{logger}->info( "Abo \"$args->{name}\" successfully deleted." );
+    }elsif( $result == 0 ){
+        $self->{logger}->warn( "Abo \"$args->{name}\" not found." );
+    }elsif( ! defined $result){
+        $self->{logger}->error( "Abo not deleted: $DBI::errstr" );
+    }
 }
 
 sub get_abos{
     my ( $self ) = @_;
 
-    my @result = @{ $self->{dbh}->selectall_arrayref( "SELECT name FROM abos ORDER BY name" )
-        or die( "An error occurred while retrieving abos\n" )};
+    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT name FROM abos ORDER BY name" );
+    if( ! defined $arr_ref ){
+        $self->{logger}->error( "An error occurred while retrieving abos: $DBI::errstr" );
+        return ();
+    }
 
-    return \@result;
+    return @{$arr_ref};
 }
 
 sub run_abo{
     my( $self, $args ) = @_;
 
-    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM abos WHERE name='$args->{name}'",
-        { Slice => {} } ) or die( "An error occurred while retrieving abo: $args->{name}\n" );
-    if( @{$arr_ref} == 0 ){
-        $self->{logger}->info( "Abo \"$args->{name}\" not found." );
-    }
-    else{
+    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM abos WHERE name='$args->{name}'", { Slice => {} } );
+    if( ! defined $arr_ref ){
+        $self->{logger}->error( "An error occurred while retrieving abo \"$args->{name}\": $DBI::errstr" );
+    }elsif( @{$arr_ref} == 0 ){
+        $self->{logger}->warn( "Abo \"$args->{name}\" not found." );
+    }else{
         my $abo = @{$arr_ref}[0];
         if( $abo->{expires_after} > 0 ){
             $self->{logger}->debug( "Abo \"$abo->{name}\" has expiry date. Checking expired downloads..." );
@@ -585,12 +598,13 @@ sub get_downloaded_media{
         "FROM downloads LEFT OUTER JOIN abos ON abos.abo_id=downloads.abo_id WHERE " .
         "downloads.expired=0 ORDER BY downloads.time";
 
-    $self->{logger}->debug( "SQL: $sql" );
-
-    my @result = @{ $self->{dbh}->selectall_arrayref( $sql, { Slice => {} }) 
-        or die( "Could not fetch downloads" )};
-
-    return \@result;
+    my $arr_ref = $self->{dbh}->selectall_arrayref( $sql, { Slice => {} } );
+    if( ! defined $arr_ref ){
+        $self->{logger}->error( "An error occurred while retrieving media: $DBI::errstr" ); 
+        return ();
+    }
+ 
+    return @{$arr_ref};
 }
 
 sub del_downloaded{
@@ -598,11 +612,23 @@ sub del_downloaded{
 
     my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT path FROM downloads WHERE " .
         "media_id=$args->{id}", { Slice => {} } );
-    if( defined $arr_ref && @{$arr_ref} == 1 ){
+    if( ! defined $arr_ref ){
+        $self->{logger}->error( "An error occurred while retrieving media: $DBI::errstr" ); 
+    }elsif( @{$arr_ref} > 1 ){
+        $self->{logger}->error( "Database inconsistency: media refers to several downloads." );
+    }elsif( @{$arr_ref} == 0 ){
+        $self->{logger}->warn( "Media not found." );
+    }else{
         my $file = ${$arr_ref}[0]->{path};
-        unlink $file or die( "Could not delete file: $file" );
-        $self->{dbh}->do( "DELETE FROM downloads WHERE media_id=$args->{id}" );
-        $self->{logger}->info( "Media \"$file\" successfully deleted." );
+        if( unlink $file ){
+            if( defined $self->{dbh}->do( "DELETE FROM downloads WHERE media_id=$args->{id}" ) ){
+                $self->{logger}->info( "Media \"$file\" successfully deleted." );
+            }else{
+                $self->{logger}->error( "Media \"$file\" deleted, but not removed from database: $DBI::errstr" );
+            }
+        }else{
+            $self->{logger}->error( "Could not delete file: $file" );
+        }
     }
 }
 
@@ -611,15 +637,23 @@ sub expire_downloads{
 
     my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM downloads WHERE " . 
         "abo_id=$args->{abo_id} AND expired=0 ", { Slice => {} } );
-    if( @{$arr_ref} > 0 ){
+    if( ! defined $arr_ref ){
+        $self->{logger}->error( "Could not retrieve expired downloads: $DBI::errstr" );
+    }elsif( @{$arr_ref} > 0 ){
         foreach my $download ( @$arr_ref ){
             my $now = date(time);
             my $exp = "$args->{expires_after}D";
             my $expires_on = date( $download->{time} ) + $exp;
             if( $now > $expires_on ){
-                $self->{logger}->info( "$download->{path} expired on $expires_on. Deleting." );
-                $self->{dbh}->do( "UPDATE downloads SET expired=1 WHERE path='$download->{path}'" );
-                unlink $download->{path}; 
+                if( unlink $download->{path} ){
+                    if( defined $self->{dbh}->do( "UPDATE downloads SET expired=1 WHERE path='$download->{path}'" ) ){
+                        $self->{logger}->info( "$download->{path} expired on $expires_on. Deleted." );
+                    }else{
+                        $self->{logger}->error( "Media \"$download->{path}\" deleted, but not removed from database: $DBI::errstr" );
+                    }
+                }else{
+                    $self->{logger}->error( "Could not delete file: $download->{path}" );
+                }
             }else{
                 $self->{logger}->debug( "$download->{path} expires on $expires_on. Not deleting." );
             }
@@ -639,14 +673,20 @@ sub requires_download{
 
     my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT expired FROM downloads WHERE " .
         "path='$args->{path}'" );
-    if( @{$arr_ref} == 0 ){
-        return 1;
+    if( defined $arr_ref ){
+        if( @{$arr_ref} == 0 ){
+            return 1;
+        }
+        
+        my $expired = @{$arr_ref}[0];
+        if( @{$expired}[0] == 1 ){
+            $self->{logger}->info( "Media $args->{path} expired. Not downloading." );
+            return 0;
+        }
+    }else{
+        $self->{logger}->error( "Could not identify required downloads: $DBI::errstr" );
     }
-    my $expired = @{$arr_ref}[0];
-    if( @{$expired}[0] == 1 ){
-        $self->{logger}->info( "Media $args->{path} expired. Not downloading." );
-        return 0;
-    }
+    
     return 1;
 }
 

@@ -241,10 +241,10 @@ sub list_titles{
 
 sub list_abos{
     my( $media ) = @_;
-    my $list = $media->get_abos();
+    my @list = $media->get_abos();
 
     my $rtn = "Abo name\n========\n";
-    for( @{$list} ){
+    for( @list ){
         $rtn .= "@{$_}\n";
     }
 
@@ -253,11 +253,11 @@ sub list_abos{
 
 sub list_downloads{
     my( $media ) = @_;
-    my $list = $media->get_downloaded_media();
+    my @list = $media->get_downloaded_media();
 
     # find length of longest abo name
     my $max_abo = length( 'Abo' );
-    foreach my $download (@$list){
+    foreach my $download ( @list ){
         my $name_length = length( $download->{name} ) || 0;
         if( $name_length > $max_abo ){
             $max_abo = $name_length;
@@ -267,11 +267,11 @@ sub list_downloads{
     my $fmt = ( ' ' x 4 ) . '%-5s || %-' . $max_abo . "s || %-19s || %s\n";
     my $rtn = sprintf( $fmt, 'ID', 'Abo', 'Download time', 'Path' );
     $rtn .= sprintf( $fmt, '==', '===', '===================', '=====================' );
-    foreach my $row ( @$list ) {
+    foreach my $row ( @list ) {
         $rtn .= sprintf( $fmt, $row->{media_id}, $row->{name} || "N/A", $row->{time}, $row->{path} );
     }
 
-    $rtn .= "\n" . scalar(@$list) . " downloaded videos.\n\n";
+    $rtn .= "\n" . scalar(@list) . " downloaded videos.\n\n";
 
     return $rtn;
 }
