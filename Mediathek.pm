@@ -239,10 +239,10 @@ sub refresh_media{
     # Prepare the statement handlers
     my $sths = {};
     my $sql = 'INSERT OR IGNORE INTO media ' .
-      '( nr, filename, title, url, url_auth, url_hd, url_org, url_rtmp, url_theme ) '.
-        'VALUES( ?, ?, ?, ?, ?, ?, ?, ?, ? )';
+      '( nr, filename, title, time, url, url_auth, url_hd, url_org, url_rtmp, url_theme ) '.
+        'VALUES( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )';
     $sths->{ins_media} = $self->{dbh}->prepare( $sql );
-
+    
     $sql = 'INSERT OR IGNORE INTO channels ( channel ) VALUES( ? )';
     $sths->{ins_channel} = $self->{dbh}->prepare( $sql );
 
@@ -283,13 +283,13 @@ sub refresh_media{
     $self->{logger}->debug( __PACKAGE__ . "->refresh_media end" );
 }
 
-# <Filme><Nr>0000</Nr><Sender>3Sat</Sender><Thema>3sat.full</Thema><Titel>Mediathek-Beiträge</Titel><Url>http://wstreaming.zdf.de/3sat/veryhigh/110103_jazzbaltica2010ceu_musik.asx</Url><UrlOrg>http://wstreaming.zdf.de/3sat/300/110103_jazzbaltica2010ceu_musik.asx</UrlOrg><Datei>110103_jazzbaltica2010ceu_musik.asx</Datei><Film-alt>false</Film-alt></Filme>
+# <Filme><Nr>0000</Nr><Sender>3Sat</Sender><Thema>3sat.full</Thema><Titel>Mediathek-Beiträge</Titel><Datum>04.09.2011</Datum><Zeit>19:23:11</Zeit><Url>http://wstreaming.zdf.de/3sat/veryhigh/110103_jazzbaltica2010ceu_musik.asx</Url><UrlOrg>http://wstreaming.zdf.de/3sat/300/110103_jazzbaltica2010ceu_musik.asx</UrlOrg><Datei>110103_jazzbaltica2010ceu_musik.asx</Datei><Film-alt>false</Film-alt></Filme>
 sub media_to_db{
     my( $t, $section ) = @_;
 
     my %values;
     ###FIXME - get all children, not just by name
-    foreach my $key ( qw/Datei Nr Sender Thema Titel Url UrlOrg UrlAuth UrlHD UrlRTMP UrlThema/ ){
+    foreach my $key ( qw/Datei Nr Sender Thema Titel Datum Url UrlOrg UrlAuth UrlHD UrlRTMP UrlThema/ ){
         my $element = $section->first_child( $key );
         if( $element ){
             $values{$key} = $element->text();
@@ -324,9 +324,10 @@ sub media_to_db{
     my $theme_id = $row->{theme_id};
 
     # Add the media data
-    #( filename, title, url, url_auth, url_hd, url_org, url_rtmp, url_theme )
-    $sths->{ins_media}->execute( $values{Nr}, $values{Datei}, $values{Titel}, $values{Url}, $values{UrlAuth},
-                                 $values{UrlHD}, $values{UrlOrg}, $values{UrlRTMP}, $values{UrlThema} );
+    #( filename, title, datum, url, url_auth, url_hd, url_org, url_rtmp, url_theme )
+    $sths->{ins_media}->execute( $values{Nr}, $values{Datei}, $values{Titel}, 
+        $values{Datum}, $values{Url}, $values{UrlAuth}, $values{UrlHD}, 
+        $values{UrlOrg}, $values{UrlRTMP}, $values{UrlThema} );
     $sths->{sel_media_id}->execute( $values{Url} );
     $row = $sths->{sel_media_id}->fetchrow_hashref();
     if( ! $row ){

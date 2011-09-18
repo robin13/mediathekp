@@ -12,6 +12,7 @@ CREATE TABLE media(
     `nr` INTEGER,
     `filename` TEXT,
     `title` TEXT,
+    `time` DATETIME,
     `url` TEXT UNIQUE NOT NULL,
     `url_auth` TEXT,
     `url_hd` TEXT,
@@ -23,6 +24,7 @@ CREATE INDEX media_title_index ON media ( title );
 CREATE INDEX media_nr_index ON media ( nr );
 CREATE INDEX media_url_org_index ON media ( url_org );
 CREATE INDEX media_url_index ON media ( url );
+CREATE INDEX media_time_index ON media ( time );
 
 DROP TABLE IF EXISTS channels;
 CREATE TABLE channels(
