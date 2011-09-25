@@ -31,6 +31,7 @@ my $result = GetOptions (
     'channel=s',
     'theme=s',
     'title=s',
+    'date=s',
     'id=i',
 
     # Required for downloading
@@ -97,6 +98,7 @@ if( $args->{action} ){
         $media->get_videos( { channel  => $args->{channel},
                               theme    => $args->{theme},
                               title    => $args->{title},
+                              date     => $args->{date},
                               media_id => $args->{id},
                               test     => $args->{test},
                           } );
@@ -105,6 +107,7 @@ if( $args->{action} ){
         my $count_videos = $media->count_videos( { channel  => $args->{channel},
                                                    theme    => $args->{theme},
                                                    title    => $args->{title},
+                                                   date     => $args->{date},
                                                    media_id => $args->{id},
                                                } );
         print "Number of videos matching: $count_videos\n";
@@ -153,6 +156,7 @@ sub list{
     my $list = $media->list({ channel => $args->{channel},
                               theme   => $args->{theme},
                               title   => $args->{title},
+                              date    => $args->{date},
                               media_id => $args->{id},
                             } );
     if( ! $list or ! $list->{channels} ){
@@ -222,15 +226,17 @@ sub list_titles{
         }
     }
 
-    my $fmt =  ( ' ' x 4 ) . '%-4s || %-' . $max_channel . "s || %-" . $max_theme . "s || %s\n";
-    my $rtn = sprintf( $fmt, 'ID', 'Channel', 'Theme', 'Title' );
-    $rtn .= sprintf( $fmt, '==', '=======', '=====', '=====' );
+    my $fmt =  ( ' ' x 4 ) . '%-5s || %-' . $max_channel . "s || %-" . $max_theme . "s || %-10s || %s\n";
+    my $rtn = sprintf( $fmt, 'ID', 'Channel', 'Theme', 'Date', 'Title' );
+    $rtn .= sprintf( $fmt, '==', '=======', '=====', '====', '=====' );
     foreach my $channel_id ( sort{ $list->{channels}->{$a} cmp $list->{channels}->{$b} }( keys( %{ $list->{channels} } ) ) ){
         foreach my $theme_id ( sort{ $list->{themes}->{$a}->{theme} cmp $list->{themes}->{$b}->{theme} }( keys( %{ $list->{themes} } ) ) ){
             if( $list->{themes}->{$theme_id}->{channel_id} eq $channel_id ){
                 foreach my $media_id ( sort{ $list->{media}->{$a}->{title} cmp $list->{media}->{$b}->{title} }( keys( %{ $list->{media} } ) ) ){
                     if( $list->{media}->{$media_id}->{theme_id} eq $theme_id ){
-                        $rtn .= sprintf( $fmt, $media_id, $list->{channels}->{$channel_id}, $list->{themes}->{$theme_id}->{theme}, $list->{media}->{$media_id}->{title} );
+                        $rtn .= sprintf( $fmt, $media_id, $list->{channels}->{$channel_id},
+                            $list->{themes}->{$theme_id}->{theme}, $list->{media}->{$media_id}->{date},
+                            $list->{media}->{$media_id}->{title} );
                     }
                 }
             }
@@ -326,6 +332,14 @@ Search options:
   --channel     Limit action to this channel
   --theme       Limit action to this theme
   --title       Limit action to this title
+  --date        Limit action to the media entry with given air date. 
+                Possible \$Modifiers are:
+                    "<"     earlier than the given date
+                    ">"     later than the given date
+                    "="     on the given date
+                The format is \$ModifierYYYY-MM-DD. 
+                Example (double quotes are needed!):
+                    --date ">2011-09-25"       
   --id          Limit action to the media entry with this id
   Search options can be explicit: Arte.DE
   or contain wildcards: "Doku*"

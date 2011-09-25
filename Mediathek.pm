@@ -239,7 +239,7 @@ sub refresh_media{
     # Prepare the statement handlers
     my $sths = {};
     my $sql = 'INSERT OR IGNORE INTO media ' .
-      '( nr, filename, title, time, url, url_auth, url_hd, url_org, url_rtmp, url_theme ) '.
+      '( nr, filename, title, date, url, url_auth, url_hd, url_org, url_rtmp, url_theme ) '.
         'VALUES( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )';
     $sths->{ins_media} = $self->{dbh}->prepare( $sql );
     
@@ -322,11 +322,21 @@ sub media_to_db{
                "Channel \"$values{Sender}\" (channel_id $channel_id) at entry number $values{Nr}" );
     }
     my $theme_id = $row->{theme_id};
+    
+    local $Class::Date::DATE_FORMAT="%Y-%m-%d";
+    my $date;
+    if( $values{Datum} ){
+        my( $day, $month, $year ) = split( /\./, $values{Datum} );
+        $date = Class::Date->new( [$year,$month,$day] );
+    }else{
+        #using current time as default
+        $date = date(time);
+    }
 
     # Add the media data
     #( filename, title, datum, url, url_auth, url_hd, url_org, url_rtmp, url_theme )
     $sths->{ins_media}->execute( $values{Nr}, $values{Datei}, $values{Titel}, 
-        $values{Datum}, $values{Url}, $values{UrlAuth}, $values{UrlHD}, 
+        $date, $values{Url}, $values{UrlAuth}, $values{UrlHD}, 
         $values{UrlOrg}, $values{UrlRTMP}, $values{UrlThema} );
     $sths->{sel_media_id}->execute( $values{Url} );
     $row = $sths->{sel_media_id}->fetchrow_hashref();
@@ -361,6 +371,16 @@ sub count_videos{
     if( $args->{title} ){
         push( @where_sql, 'm.title=?' );
         push( @where_args, $args->{title} );
+    }
+    if( $args->{date} ){
+        my $modifier = substr( $args->{date}, 0, 1 );
+        my $date = substr( $args->{date}, 1 );
+        if( $modifier =~ m/[<>=]/ ){
+            push( @where_sql, 'm.date' . $modifier . '?' );
+            push( @where_args, $date );
+        }else{
+            $self->{logger}->warn( "Unsupported date modifier: $modifier" );
+        }
     }
     if( scalar( @where_sql ) > 0 ){
         $sql .= ' WHERE ' . join( ' AND ', @where_sql );
@@ -422,6 +442,16 @@ sub list{
         push( @where_sql, 'm.id=?' );
         push( @where_args, $args->{media_id} );
     }
+    if( $args->{date} ){
+        my $modifier = substr( $args->{date}, 0, 1 );
+        my $date = substr( $args->{date}, 1 );
+        if( $modifier =~ m/[<>=]/ ){
+            push( @where_sql, 'm.date' . $modifier . '?' );
+            push( @where_args, $date );
+        }else{
+            $self->{logger}->warn( "Unsupported date modifier: $modifier" );
+        }
+    }
 
 
     my $sql = 'SELECT ' . join( ', ',  @selects ) .
@@ -446,6 +476,7 @@ sub list{
         }
         if( $row->{media_id} ){
             $out->{media}->{$row->{media_id}} = { title    => $row->{title},
+                                                  date     => $row->{date},
                                                   theme_id => $row->{theme_id},
                                                   url      => $row->{url} };
         }

@@ -1,5 +1,7 @@
 TODO:
 
+* Use air date of a media to determine if abo should download it or not
+
 * add possibility to VACUUM the db, as it seems to slow down or even completely fail the
   refresh_media action
 
@@ -11,21 +13,17 @@ TODO:
 
 * del_abo: have optional to remove also all related media 
 
-* the media tables do not contain the date of the program. Media.xml does but is not dumped into
-  the db. Change that in order to define an abo, in which at most $today - $d days are considered for
-  selecting programs to download. Could also be another search paramter: --recentdays 10
-
-* fix flvstreamer... commandline works with given parameters, but Video::Flvstreamer fails...
-
 * Think about how to have for powerful constraints, not just "*" which translates 
   into "LIKE", but something compound should be possible, e.g.  --theme "Terra X" --title "!vorschau*"
 
 * Change module layout.  Use Module::Starter to create typical structure with Makefile.PL and a manifest.
 
 DONE:
+* Added air date to db, and use it as a search/count criterion
 * DELETE seems to always succeed, even if the abo does not exist: checking now return value
 * implement delete downloaded media (delete from target folder and from downloads
   in db)
+* fix flvstreamer... commandline works with given parameters, but Video::Flvstreamer fails...
 * implement list downloaded media (those that are not expired, i.e. still in the
   target folder)
 * using IO::Uncompress::AnyUncompress to unzip/bunzip2 media file 

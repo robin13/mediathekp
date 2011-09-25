@@ -12,7 +12,7 @@ CREATE TABLE media(
     `nr` INTEGER,
     `filename` TEXT,
     `title` TEXT,
-    `time` DATETIME,
+    `date` DATE,
     `url` TEXT UNIQUE NOT NULL,
     `url_auth` TEXT,
     `url_hd` TEXT,
