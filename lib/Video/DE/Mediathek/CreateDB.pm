@@ -1,3 +1,39 @@
+package Video::DE::Mediathek::CreateDB;
+use Moose;
+
+has 'dbh' => ( 
+    is          => 'ro', 
+    isa         => 'DBI::db',
+    required    => 1,
+    );
+
+has 'create_sql' => (
+    is          => 'ro',
+    isa         => 'Str',
+    lazy        => 1,
+    builder     => '_build_create_sql' );
+
+sub _build_create_sql {
+    my $self = shift;
+    my @lines = <DATA>;
+    
+    my $sql = '';
+    LINE:
+    foreach my $line( @lines ) {
+        if( $line =~ m/^\s*$/ || $line =~ m/^\-\-/ || $line =~ m/^\#/ ){
+            next LINE;
+        }
+        chomp( $line );
+        $sql .= $line;
+    }
+    return $sql
+}
+    
+
+1;
+
+__DATA__
+
 DROP TABLE IF EXISTS dbstate;
 CREATE TABLE dbstate(
     id INTEGER PRIMARY KEY,
@@ -84,3 +120,4 @@ CREATE TABLE sources(
     );
 CREATE INDEX sources_time_index ON sources ( time );
 CREATE INDEX sources_tried_index ON sources ( tried );
+

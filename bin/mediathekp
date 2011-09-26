@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
-use Mediathek;
+use Video::DE::Mediathek;
 use Getopt::Long;
 use Log::Log4perl;
 use YAML::Any qw/Dump LoadFile DumpFile/;
@@ -55,8 +55,6 @@ if( $args->{help} ){
     exit( 0 );
 }
 
-
-
 if( $args->{config} && -f $args->{config} ){
     eval{
         my $load_args = LoadFile( $args->{config} );
@@ -81,14 +79,10 @@ if( ! -d $args->{cache_dir} ){
     exit;
 }
 
-Log::Log4perl->init( 'log.conf' );
-my $logger = Log::Log4perl->get_logger();
-
-$logger->debug( "Args:\n" . Dump( $args ) );
-
 # Pass the memory usage monitor to Mediathek
-my $media = Mediathek->new( $args );
-
+my $media = Video::DE::Mediathek->new( $args );
+my $logger = $media->logger();
+$logger->debug( "Created Mediathek" );
 if( $args->{action} ){
     if( $args->{action} eq 'refresh_media' ){
         # Refresh the media listing?

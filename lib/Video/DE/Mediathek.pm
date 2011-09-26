@@ -1,6 +1,5 @@
-package Mediathek;
-use strict;
-use warnings;
+package Video::DE::Mediathek;
+use Moose;
 
 BEGIN { $Class::Date::WARNINGS=0; }
 
@@ -10,7 +9,6 @@ use XML::Twig;
 use File::Util;
 use File::Spec::Functions;
 use YAML::Any qw/Dump/;
-use Log::Log4perl;
 
 use Data::Dumper;
 use Class::Date qw/date/;
@@ -20,75 +18,159 @@ use Lingua::DE::ASCII;
 use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError) ;
 
 use Video::Flvstreamer 0.03;
+use Video::DE::Mediathek::LoggerHandler;
 
-sub new{
-    my( $class, $args ) = @_;
+has 'proxy' => (
+    is          => 'ro',
+    isa         => 'Str',
+    );
 
-    my $self=  {};
+has 'agent' => (
+    is          => 'ro',
+    isa         => 'Str',
+    );
 
-    bless $self, $class;
+has 'cookie_jar' => (
+    is          => 'ro',
+    isa         => 'Str',
+    );
 
-    my $logger = Log::Log4perl->get_logger();
-    $self->{logger} = $logger;
+has 'mech'  => (
+    is          => 'ro',
+    isa         => 'WWW::Mechanize',
+    lazy        => 1,
+    builder     => '_build_mech',
+    );
+
+has 'logger' => (
+    is          => 'ro',
+    isa         => 'Log::Log4perl::Logger',
+    lazy        => 1,
+    builder     => '_build_logger',
+    );
+
+has 'flvstreamer_binary' => (
+    is          => 'ro',
+    isa         => 'Str', # TODO: RCL 2011-09-27 Test for executable binary
+    required    => 1,
+    default     => 'flvstreamer',
+    );
+
+has 'cache_time' => (
+    is          => 'ro',
+    isa         => 'Int',
+    required    => 1,
+    default     => 3600,
+    );
+
+has 'sqlite_cache_size' => (
+    is          => 'ro',
+    isa         => 'Int',
+    required    => 1,
+    default     => 80000,  # Allow sqlite to use 80MB in memory for caching
+    );
+
+has 'cache_dir' => (
+    is          => 'ro',
+    isa         => 'Str', # TODO: RCL 2011-09-27 Test for directory exists
+    required    => 1,
+    );
+
+has 'target_dir' => (
+    is          => 'ro',
+    isa         => 'Str', # TODO: RCL 2011-09-27 Test for directory exists
+    required    => 1,
+    );
+
+has 'socks' => (
+    is          => 'ro',
+    isa         => 'Str',
+    );
+
+has 'flv' => (
+    is          => 'ro',
+    isa         => 'Video::Flvstreamer',
+    lazy        => 1,
+    builder     => '_build_flv',
+    );
+
+has 'cache_files' => (
+    is          => 'ro',
+    isa         => 'HashRef',
+    builder     => '_build_cache_files',
+    lazy        => 1,
+    );
+
+has 'dbh' => (
+    is          => 'ro',
+    isa         => 'DBI::db',
+    lazy        => 1,
+    builder     => '_build_dbh',
+    );
+
+has 'file_util' => (
+    is          => 'ro',
+    isa         => 'File::Util',
+    required    => 1,
+    lazy        => 1,
+    default     => sub{ File::Util->new() },
+    );
+
+
+sub _build_mech {
+    my $self = shift;
 
     my $mech = WWW::Mechanize->new();
-    if( $args->{proxy} ){
-        $mech->proxy(['http', 'ftp'], $args->{proxy} )
-    }
+    $mech->proxy(['http', 'ftp'], $self->proxy )            if( $self->proxy );
+    $mech->agent( $self->agent )                            if( $self->agent );
+    $mech->cookie_jar( { file => $self->cookie_jar } )      if( $self->cookie_jar );
+    return $mech;
+}
 
-    if( $args->{agent} ){
-        $mech->agent( $args->{agent} );
-    }
+sub _build_logger {
+    my $self = shift;
+    my $logger_handler = Video::DE::Mediathek::LoggerHandler->new();
 
-    if( $args->{cookie_jar} ){
-        $mech->cookie_jar( { file => $args->{cookie_jar} } );
-    }
+    my $logger = $logger_handler->logger();
+    $logger->debug( "logger initialised" );
+    return $logger;
+}
 
+sub _build_flv {
+    my $self = shift;
 
-    $self->{mech} = $mech;
+    # TODO: RCL 2011-09-27 Chang to hash rather than hashref when Flvstreamer updated
+    return Video::Flvstreamer->new( 
+        {
+            target_dir  => $self->target_dir,
+            timeout     => $self->timeout,
+            flvstreamer => $self->flvstreamer_binary,
+            socks       => $self->socks, 
+            debug       => $self->logger->is_debug(),
+        } );
 
-    foreach( qw/cookie_jar flvstreamer cache_time target_dir sqlite_cache_size/ ){
-        if( $args->{$_} ){
-            $self->{$_} = $args->{$_};
-        }
-    }
+}
 
-    # Some defaults
+sub _build_cache_files {
+    my $self = shift;
+    
+    my %cache_files = (
+        sources     => catfile( $self->cache_dir, 'sources.xml' ),
+        media       => catfile( $self->cache_dir, 'media.xml' ),
+        media_zip   => catfile( $self->cache_dir, 'media.zip' ),
+        db          => catfile( $self->cache_dir, 'mediathek.db' ),
+    );
+    return \%cache_files;
+}
 
-    $self->{flvstreamer} ||= 'flvstreamer';
-    $self->{cache_time}  ||= 3600;
-    $self->{sqlite_cache_size} ||= 80000;  # Allow sqlite to use 80MB in memory for caching
-    $self->{logger}->debug( "Using flvstreamer: $self->{flvstreamer}" );
-    $self->{logger}->debug( "Cache time: $self->{cache_time}" );
+sub _build_dbh {
+    my $self = shift;
 
-    if( $self->{sqlite_cache_size} !~ m/^\d*$/ ){
-        die( "Invalid number for sqlite_cache_size: $self->{sqlite_cache_size}" );
-    }
-
-    my $f = File::Util->new();
-    $self->{f} = $f;
-
-    if( ! $args->{cache_dir} || ! -d $args->{cache_dir} ){
-        die( "Cannot run without defining cache dir, or cache dir does not exist" );
-    }
-    $self->{cache_files}->{sources}   = catfile( $args->{cache_dir}, 'sources.xml' );
-    $self->{cache_files}->{media}     = catfile( $args->{cache_dir}, 'media.xml' );
-    $self->{cache_files}->{media_zip} = catfile( $args->{cache_dir}, 'media.zip' );
-    $self->{cache_files}->{db}        = catfile( $args->{cache_dir}, 'mediathek.db' );
-
-    my $flv = Video::Flvstreamer->new( { target_dir  => $args->{target_dir},
-                                         timeout     => $args->{timeout},
-                                         flvstreamer => $args->{flvstreamer},
-                                         socks       => $args->{socks}, 
-                                         debug       => $self->{logger}->is_debug(),
-                                        } );
-    $self->{flv} = $flv;
-
-
-    if( ! -f $self->{cache_files}->{db} ){
+    if( ! -f $self->cache_files->{db} ){
         $self->init_db();
     }
-    my $dbh = DBI->connect("dbi:SQLite:dbname=" . $self->{cache_files}->{db},"","");
+
+    my $dbh = DBI->connect("dbi:SQLite:dbname=" . $self->cache_files->{db},"","");
     if( ! $dbh ){
         die( "DB could not be initialised: #!" );
     }
@@ -98,43 +180,36 @@ sub new{
     # turning synchronous off makes SQLite /much/ faster!
     # It might also be responsible for race conditions where a read doesn't see a write which has just happened...
     $dbh->do( "PRAGMA synchronous=OFF" );
-    $dbh->do( "PRAGMA cache_size=" . $self->{sqlite_cache_size} );
-
-    $self->{dbh} = $dbh;
-    $self->{logger}->debug( "Cache files:\n" . Dump( $self->{cache_files} ) );
-
-    return $self;
-
+    $dbh->do( "PRAGMA cache_size=" . $self->sqlite_cache_size );
+    return $dbh;
 }
 
-sub refresh_sources{
-    my( $self ) = @_;
+
+sub refresh_sources {
+    my $self = shift;
+    
     my $f = File::Util->new();
 
 
     # Give some debug info about the cache file
-    if( $self->{logger}->is_debug() && $self->{cache_files}->{sources} ){
-        $self->{logger}->debug( "Cached sources file " . ( -f $self->{cache_files}->{sources} ? 'exists' : 'does not exist' ) );
-        if( -f $self->{cache_files}->{sources} ){
-            $self->{logger}->debug( "Cached sources file is " . ( time() - $self->{f}->created( $self->{cache_files}->{sources} ) ) . 's old' );
+    if( $self->logger->is_debug() && $self->cache_files->{sources} ){
+        $self->logger->debug( "Cached sources file " . ( -f $self->cache_files->{sources} ? 'exists' : 'does not exist' ) );
+        if( -f $self->cache_files->{sources} ){
+            $self->logger->debug( "Cached sources file is " . ( time() - $self->file_util->created( $self->cache_files->{sources} ) ) . 's old' );
         }
     }
 
-    if( ! $self->{cache_files}->{sources} ){
-        die( "Cannot refresh sources without a cache file" );
+    if( ! -f $self->cache_files->{sources} ||
+          ( time() - $self->file_util->created( $self->cache_files->{sources} ) > $self->cache_time ) ){
+        $self->logger->debug( "Loading sources from internet" );
+        $self->get_url_to_file( 'http://zdfmediathk.sourceforge.net/update.xml', $self->cache_files->{sources} );
     }
+    $self->logger->debug( "Sources XML file is " . 
+                              Format::Human::Bytes::base10( $self->file_util->size( $self->cache_files->{sources} ) ) );
 
-    if( ! -f $self->{cache_files}->{sources} ||
-          ( time() - $self->{f}->created( $self->{cache_files}->{sources} ) > $self->{cache_time} ) ){
-        $self->{logger}->debug( "Loading sources from internet" );
-        $self->get_url_to_file( 'http://zdfmediathk.sourceforge.net/update.xml', $self->{cache_files}->{sources} );
-    }
-    $self->{logger}->debug( "Sources XML file is " . 
-                              Format::Human::Bytes::base10( $self->{f}->size( $self->{cache_files}->{sources} ) ) );
-
-    $self->{logger}->debug( "Deleting sources table in db" );
+    $self->logger->debug( "Deleting sources table in db" );
     my $sql = 'DELETE FROM sources';
-    my $sth = $self->{dbh}->prepare( $sql );
+    my $sth = $self->dbh->prepare( $sql );
     $sth->execute;
 
     my $t= XML::Twig->new( twig_handlers =>
@@ -142,12 +217,12 @@ sub refresh_sources{
                            },
                           );
     $sql = 'INSERT INTO sources ( url, time, tried ) VALUES( ?, ?, 0 )';
-    $sth = $self->{dbh}->prepare( $sql );
+    $sth = $self->dbh->prepare( $sql );
     $t->{mediathek_sth} = $sth;
 
-    $self->{logger}->debug( "Parsing source XML: $self->{cache_files}->{sources}" );
-    $t->parsefile( $self->{cache_files}->{sources} );
-    $self->{logger}->debug( "Finished parsing source XML" );
+    $self->logger->debug( sprintf "Parsing source XML: %s", $self->cache_files->{sources} );
+    $t->parsefile( $self->cache_files->{sources} );
+    $self->logger->debug( "Finished parsing source XML" );
     $t->purge;
     $sth->finish;
 }
@@ -174,29 +249,21 @@ sub refresh_media{
 
     $self->refresh_sources();
 
-    if( ! $self->{dbh} ){
-        die( "Cannot get_media without a dbh" );
-    }
-
-    if( ! $self->{cache_files}->{media} ){
-        die( "Cannot refresh media without a cache file" );
-    }
-
     # Give some debug info about the cache file
-    if( $self->{logger}->is_debug() && $self->{cache_files}->{media} ){
-        $self->{logger}->debug( "Cached media file ($self->{cache_files}->{media}) " . ( -f $self->{cache_files}->{media} ? 'exists' : 'does not exist' ) );
-        if( -f $self->{cache_files}->{media} ){
-            $self->{logger}->debug( "Cached media file is " . ( time() - $self->{f}->created( $self->{cache_files}->{media} ) ) . 's old' );
+    if( $self->logger->is_debug() && $self->cache_files->{media} ){
+        $self->logger->debug( "Cached media file ($self->cache_files->{media}) " . ( -f $self->cache_files->{media} ? 'exists' : 'does not exist' ) );
+        if( -f $self->cache_files->{media} ){
+            $self->logger->debug( "Cached media file is " . ( time() - $self->file_util->created( $self->cache_files->{media} ) ) . 's old' );
         }
     }
 
-    if( ! -f $self->{cache_files}->{media} ||
-          ( time() - $self->{f}->created( $self->{cache_files}->{media} ) > $self->{cache_time} ) ){
+    if( ! -f $self->cache_files->{media} ||
+          ( time() - $self->file_util->created( $self->cache_files->{media} ) > $self->cache_time ) ){
 
         my $sql = 'SELECT id, url, time FROM sources WHERE tried==0 ORDER BY time DESC LIMIT 1';
-        my $sth_select = $self->{dbh}->prepare( $sql );
+        my $sth_select = $self->dbh->prepare( $sql );
         $sql = 'UPDATE sources SET tried=1 WHERE url=?';
-        my $sth_update = $self->{dbh}->prepare( $sql );
+        my $sth_update = $self->dbh->prepare( $sql );
         my $got_media = undef;
       MEDIA_SOURCE:
         do{
@@ -207,16 +274,16 @@ sub refresh_media{
                 die( "No url found in sources table" );
             }
 
-            $self->{logger}->debug( "Getting media from internet: $row->{url} ($row->{time})" );
-            $self->get_url_to_file( $row->{url}, $self->{cache_files}->{media_zip} );
-            $self->{logger}->debug( "Compressed file is " . 
-                                      Format::Human::Bytes::base10( $self->{f}->size( $self->{cache_files}->{media_zip} ) ) );
+            $self->logger->debug( "Getting media from internet: $row->{url} ($row->{time})" );
+            $self->get_url_to_file( $row->{url}, $self->cache_files->{media_zip} );
+            $self->logger->debug( "Compressed file is " . 
+                                      Format::Human::Bytes::base10( $self->file_util->size( $self->cache_files->{media_zip} ) ) );
 
-            $self->{logger}->debug( "Uncompressing media..." );
+            $self->logger->debug( "Uncompressing media..." );
             my $media_xml;
             # Uncompress the file to an the XML string
-            if( ! anyuncompress $self->{cache_files}->{media_zip} => $self->{cache_files}->{media} ){
-                $self->{logger}->warn( $AnyUncompressError );
+            if( ! anyuncompress $self->cache_files->{media_zip} => $self->cache_files->{media} ){
+                $self->logger->warn( $AnyUncompressError );
                 $sth_update->execute( $row->{url} );
                 next MEDIA_SOURCE;
             }
@@ -225,14 +292,14 @@ sub refresh_media{
         $sth_select->finish();
         $sth_update->finish();
     }
-    $self->{logger}->debug( "Media XML file is " .
-                              Format::Human::Bytes::base10( $self->{f}->size( $self->{cache_files}->{media} ) ) );
+    $self->logger->debug( "Media XML file is " .
+                              Format::Human::Bytes::base10( $self->file_util->size( $self->cache_files->{media} ) ) );
 
-    $self->{logger}->debug( "Deleting media tables in db" );
-    $self->{dbh}->do( 'DELETE FROM channels' );
-    $self->{dbh}->do( 'DELETE FROM themes' );
-    $self->{dbh}->do( 'DELETE FROM map_media' );
-    $self->{dbh}->do( 'DELETE FROM media' );
+    $self->logger->debug( "Deleting media tables in db" );
+    $self->dbh->do( 'DELETE FROM channels' );
+    $self->dbh->do( 'DELETE FROM themes' );
+    $self->dbh->do( 'DELETE FROM map_media' );
+    $self->dbh->do( 'DELETE FROM media' );
 
     my $t= XML::Twig->new( twig_handlers => { Filme => \&media_to_db, },
                           );
@@ -241,34 +308,34 @@ sub refresh_media{
     my $sql = 'INSERT OR IGNORE INTO media ' .
       '( nr, filename, title, date, url, url_auth, url_hd, url_org, url_rtmp, url_theme ) '.
         'VALUES( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )';
-    $sths->{ins_media} = $self->{dbh}->prepare( $sql );
+    $sths->{ins_media} = $self->dbh->prepare( $sql );
     
     $sql = 'INSERT OR IGNORE INTO channels ( channel ) VALUES( ? )';
-    $sths->{ins_channel} = $self->{dbh}->prepare( $sql );
+    $sths->{ins_channel} = $self->dbh->prepare( $sql );
 
     $sql = 'INSERT OR IGNORE INTO themes ( channel_id, theme ) VALUES( ?, ? )';
-    $sths->{ins_theme} = $self->{dbh}->prepare( $sql );
+    $sths->{ins_theme} = $self->dbh->prepare( $sql );
 
     $sql = 'INSERT OR IGNORE INTO map_media ( media_id, theme_id ) VALUES( ?, ? )';
-    $sths->{ins_map_media} = $self->{dbh}->prepare( $sql );
+    $sths->{ins_map_media} = $self->dbh->prepare( $sql );
 
 
     $sql = 'SELECT id AS channel_id FROM channels WHERE channel=?';
-    $sths->{sel_channel_id} = $self->{dbh}->prepare( $sql );
+    $sths->{sel_channel_id} = $self->dbh->prepare( $sql );
 
     $sql = 'SELECT id AS theme_id FROM themes WHERE channel_id=? AND theme=?';
-    $sths->{sel_theme_id} = $self->{dbh}->prepare( $sql );
+    $sths->{sel_theme_id} = $self->dbh->prepare( $sql );
 
     $sql = 'SELECT id AS media_id FROM media WHERE url=?';
-    $sths->{sel_media_id} = $self->{dbh}->prepare( $sql );
+    $sths->{sel_media_id} = $self->dbh->prepare( $sql );
 
     $t->{mediathek_sths} = $sths;
-    $t->{mediathek_logger} = $self->{logger};
+    $t->{mediathek_logger} = $self->logger;
     $t->{mediathek_count_inserts} = 0;
 
-    $self->{logger}->debug( "Parsing media XML: $self->{cache_files}->{media}" );
-    $t->parsefile( $self->{cache_files}->{media} );
-    $self->{logger}->debug( "Finished parsing media XML" );
+    $self->logger->debug( sprintf "Parsing media XML: %s", $self->cache_files->{media} );
+    $t->parsefile( $self->cache_files->{media} );
+    $self->logger->debug( "Finished parsing media XML" );
     $t->purge;
 
     # Clean up all of the handlers
@@ -280,7 +347,7 @@ sub refresh_media{
     $t->{mediathek_logger} = undef;
     $t->{mediathek_count_inserts} = undef;
 
-    $self->{logger}->debug( __PACKAGE__ . "->refresh_media end" );
+    $self->logger->debug( __PACKAGE__ . "->refresh_media end" );
 }
 
 # <Filme><Nr>0000</Nr><Sender>3Sat</Sender><Thema>3sat.full</Thema><Titel>Mediathek-Beiträge</Titel><Datum>04.09.2011</Datum><Zeit>19:23:11</Zeit><Url>http://wstreaming.zdf.de/3sat/veryhigh/110103_jazzbaltica2010ceu_musik.asx</Url><UrlOrg>http://wstreaming.zdf.de/3sat/300/110103_jazzbaltica2010ceu_musik.asx</UrlOrg><Datei>110103_jazzbaltica2010ceu_musik.asx</Datei><Film-alt>false</Film-alt></Filme>
@@ -379,16 +446,16 @@ sub count_videos{
             push( @where_sql, 'm.date' . $modifier . '?' );
             push( @where_args, $date );
         }else{
-            $self->{logger}->warn( "Unsupported date modifier: $modifier" );
+            $self->logger->warn( "Unsupported date modifier: $modifier" );
         }
     }
     if( scalar( @where_sql ) > 0 ){
         $sql .= ' WHERE ' . join( ' AND ', @where_sql );
     }
 
-    $self->{logger}->debug( "SQL: $sql" );
-    $self->{logger}->debug( "SQL Args: " . join( ', ', @where_args ) );
-    my $sth = $self->{dbh}->prepare( $sql );
+    $self->logger->debug( "SQL: $sql" );
+    $self->logger->debug( "SQL Args: " . join( ', ', @where_args ) );
+    my $sth = $self->dbh->prepare( $sql );
     $sth->execute( @where_args );
     my $row = $sth->fetchrow_hashref();
     return $row->{count_videos};
@@ -449,7 +516,7 @@ sub list{
             push( @where_sql, 'm.date' . $modifier . '?' );
             push( @where_args, $date );
         }else{
-            $self->{logger}->warn( "Unsupported date modifier: $modifier" );
+            $self->logger->warn( "Unsupported date modifier: $modifier" );
         }
     }
 
@@ -461,10 +528,10 @@ sub list{
         $sql .= ' WHERE ' . join( ' AND ', @where_sql );
     }
 
-    $self->{logger}->debug( "SQL: $sql" );
-    $self->{logger}->debug( "SQL Args: " . join( ', ', @where_args ) );
+    $self->logger->debug( "SQL: $sql" );
+    $self->logger->debug( "SQL Args: " . join( ', ', @where_args ) );
 
-    my $sth = $self->{dbh}->prepare( $sql );
+    my $sth = $self->dbh->prepare( $sql );
     $sth->execute( @where_args );
     my $row;
     my $out;
@@ -487,36 +554,28 @@ sub list{
 sub get_videos{
     my( $self, $args ) = @_;
 
-    if( ! $self->{target_dir} ){
-        die( __PACKAGE__ . " target dir not defined" );
-    }
-
-    if( ! -d $self->{target_dir} ){
-        die( __PACKAGE__ . " target dir does not exist: $self->{target_dir}" );
-    }
-
     $args->{list_all} = 1;
     my $list = $self->list( $args );
 	my $abo_id = $args->{abo_id} || -1;
 
     if( ! $list->{media} ){
-        $self->{logger}->warn( "No videos found matching your search..." );
+        $self->logger->warn( "No videos found matching your search..." );
     }
 
-    $self->{logger}->info( "Found " . scalar( keys( %{ $list->{media} } ) ) . " videos to download" );
+    $self->logger->info( "Found " . scalar( keys( %{ $list->{media} } ) ) . " videos to download" );
     
-    my $sth = $self->{dbh}->prepare( 'INSERT INTO downloads ( abo_id, media_id, path, url, time ) '.
+    my $sth = $self->dbh->prepare( 'INSERT INTO downloads ( abo_id, media_id, path, url, time ) '.
         'VALUES( ?, ?, ?, ?, ? )' );
 
     foreach my $media_id ( sort( keys( %{ $list->{media} } ) ) ){
         my $video = $list->{media}->{$media_id};
         my $theme = to_ascii( $list->{themes}->{ $video->{theme_id} }->{theme} );
         my $channel = to_ascii( $list->{channels}->{ $list->{themes}->{ $video->{theme_id} }->{channel_id} } );
-        my $target_dir = catfile( $self->{target_dir}, $channel, $theme );
+        my $target_dir = catfile( $self->target_dir, $channel, $theme );
         $target_dir =~ s/\s/_/g;
-        $self->{logger}->debug( "Target dir: $target_dir" );
+        $self->logger->debug( "Target dir: $target_dir" );
         if( ! -d $target_dir ){
-            if( ! $self->{f}->make_dir( $target_dir ) ){
+            if( ! $self->file_util->make_dir( $target_dir ) ){
                 die( "Could not make target dir: $target_dir" );
             }
         }
@@ -528,12 +587,12 @@ sub get_videos{
         $title =~ s/\W/_/g;
         my $target_path = catfile( $target_dir, $title . '.avi' );
         if( $self->requires_download( { path => $target_path } ) && ! $args->{test} ){ 
-            $self->{logger}->info( sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
+            $self->logger->info( sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
             if( $video->{url} =~ /^http/ ){
                 my @args = ( "/usr/bin/mplayer", "-playlist", to_ascii($video->{url}), 
                     "-dumpstream", "-dumpfile", $target_path );
-                $self->{logger}->debug( sprintf( "Running: %s", "@args" ) );
-                system( @args ) == 0 or $self->{logger}->warn( sprintf( "%s", $! ) );
+                $self->logger->debug( sprintf( "Running: %s", "@args" ) );
+                system( @args ) == 0 or $self->logger->warn( sprintf( "%s", $! ) );
             }else{
                 # Sometimes the url is not just a url, it's a whole load of arguments tailored for a flvstreamer
                 # download.
@@ -541,15 +600,15 @@ sub get_videos{
                 # These have to be passed as individual arguments, otherwise flvstreamer will receive the whole
                 # string as one argument and will not be able to parse it.
                 my @video_args = split( ' ', $video->{url} );
-                $self->{flv}->get_raw( \@video_args, $target_path );
+                $self->flv->get_raw( \@video_args, $target_path );
             }
             
             if( -e $target_path ){
                 if( ! defined $sth->execute( $abo_id, $media_id, $target_path, $video->{url}, date(time) ) ){
-                    $self->{logger}->error( "Could not insert downloaded media: $DBI::errstr" );
+                    $self->logger->error( "Could not insert downloaded media: $DBI::errstr" );
                 }
             }else{ 
-                $self->{logger}->warn( sprintf( "Could not download %s", $video->{title} ) );
+                $self->logger->warn( sprintf( "Could not download %s", $video->{title} ) );
             }
         }
     }
@@ -560,16 +619,16 @@ sub add_abo{
     my( $self, $args ) = @_;
     
     if( !$args->{channel} && !$args->{theme} && !$args->{title} ){
-        $self->{logger}->warn( "Abo would download all media. Please specify a filter.\n");
+        $self->logger->warn( "Abo would download all media. Please specify a filter.\n");
         return undef;
     }
   
-    my $sth = $self->{dbh}->prepare( 'INSERT INTO abos ( name, channel, theme, ' .
+    my $sth = $self->dbh->prepare( 'INSERT INTO abos ( name, channel, theme, ' .
         'title, expires_after) VALUES( ?, ?, ?, ?, ? )' );
     if( $sth->execute( $args->{name}, $args->{channel}, $args->{theme}, $args->{title}, $args->{expires} ) ){
-        $self->{logger}->info( "Abo \"$args->{name}\" successfully added." );
+        $self->logger->info( "Abo \"$args->{name}\" successfully added." );
     }else{
-        $self->{logger}->error( "Abo not added: $DBI::errstr" );
+        $self->logger->error( "Abo not added: $DBI::errstr" );
     }
     $sth->finish();
 }
@@ -577,22 +636,22 @@ sub add_abo{
 sub del_abo{
     my( $self, $args ) = @_;
 
-    my $result = $self->{dbh}->do( "DELETE FROM abos WHERE name='$args->{name}'" );
+    my $result = $self->dbh->do( "DELETE FROM abos WHERE name='$args->{name}'" );
     if( $result == 1 ){
-        $self->{logger}->info( "Abo \"$args->{name}\" successfully deleted." );
+        $self->logger->info( "Abo \"$args->{name}\" successfully deleted." );
     }elsif( $result == 0 ){
-        $self->{logger}->warn( "Abo \"$args->{name}\" not found." );
+        $self->logger->warn( "Abo \"$args->{name}\" not found." );
     }elsif( ! defined $result){
-        $self->{logger}->error( "Abo not deleted: $DBI::errstr" );
+        $self->logger->error( "Abo not deleted: $DBI::errstr" );
     }
 }
 
 sub get_abos{
     my ( $self ) = @_;
 
-    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT name FROM abos ORDER BY name" );
+    my $arr_ref = $self->dbh->selectall_arrayref( "SELECT name FROM abos ORDER BY name" );
     if( ! defined $arr_ref ){
-        $self->{logger}->error( "An error occurred while retrieving abos: $DBI::errstr" );
+        $self->logger->error( "An error occurred while retrieving abos: $DBI::errstr" );
         return ();
     }
 
@@ -602,18 +661,18 @@ sub get_abos{
 sub run_abo{
     my( $self, $args ) = @_;
 
-    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM abos WHERE name='$args->{name}'", { Slice => {} } );
+    my $arr_ref = $self->dbh->selectall_arrayref( "SELECT * FROM abos WHERE name='$args->{name}'", { Slice => {} } );
     if( ! defined $arr_ref ){
-        $self->{logger}->error( "An error occurred while retrieving abo \"$args->{name}\": $DBI::errstr" );
+        $self->logger->error( "An error occurred while retrieving abo \"$args->{name}\": $DBI::errstr" );
     }elsif( @{$arr_ref} == 0 ){
-        $self->{logger}->warn( "Abo \"$args->{name}\" not found." );
+        $self->logger->warn( "Abo \"$args->{name}\" not found." );
     }else{
         my $abo = @{$arr_ref}[0];
         if( $abo->{expires_after} > 0 ){
-            $self->{logger}->debug( "Abo \"$abo->{name}\" has expiry date. Checking expired downloads..." );
+            $self->logger->debug( "Abo \"$abo->{name}\" has expiry date. Checking expired downloads..." );
             $self->expire_downloads( { abo_id => $abo->{abo_id}, expires_after => $abo->{expires_after} } ); 
         }
-        $self->{logger}->debug( "Abo \"$abo->{name}\" has no expiry date. Proceeding with downloads..." );
+        $self->logger->debug( "Abo \"$abo->{name}\" has no expiry date. Proceeding with downloads..." );
         $self->get_videos( {
             channel => $abo->{channel},
             theme   => $abo->{theme},
@@ -630,9 +689,9 @@ sub get_downloaded_media{
         "FROM downloads LEFT OUTER JOIN abos ON abos.abo_id=downloads.abo_id WHERE " .
         "downloads.expired=0 ORDER BY downloads.time";
 
-    my $arr_ref = $self->{dbh}->selectall_arrayref( $sql, { Slice => {} } );
+    my $arr_ref = $self->dbh->selectall_arrayref( $sql, { Slice => {} } );
     if( ! defined $arr_ref ){
-        $self->{logger}->error( "An error occurred while retrieving media: $DBI::errstr" ); 
+        $self->logger->error( "An error occurred while retrieving media: $DBI::errstr" ); 
         return ();
     }
  
@@ -642,24 +701,24 @@ sub get_downloaded_media{
 sub del_downloaded{
     my ( $self, $args ) = @_;
 
-    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT path FROM downloads WHERE " .
+    my $arr_ref = $self->dbh->selectall_arrayref( "SELECT path FROM downloads WHERE " .
         "media_id=$args->{id}", { Slice => {} } );
     if( ! defined $arr_ref ){
-        $self->{logger}->error( "An error occurred while retrieving media: $DBI::errstr" ); 
+        $self->logger->error( "An error occurred while retrieving media: $DBI::errstr" ); 
     }elsif( @{$arr_ref} > 1 ){
-        $self->{logger}->error( "Database inconsistency: media refers to several downloads." );
+        $self->logger->error( "Database inconsistency: media refers to several downloads." );
     }elsif( @{$arr_ref} == 0 ){
-        $self->{logger}->warn( "Media not found." );
+        $self->logger->warn( "Media not found." );
     }else{
         my $file = ${$arr_ref}[0]->{path};
         if( unlink $file ){
-            if( defined $self->{dbh}->do( "DELETE FROM downloads WHERE media_id=$args->{id}" ) ){
-                $self->{logger}->info( "Media \"$file\" successfully deleted." );
+            if( defined $self->dbh->do( "DELETE FROM downloads WHERE media_id=$args->{id}" ) ){
+                $self->logger->info( "Media \"$file\" successfully deleted." );
             }else{
-                $self->{logger}->error( "Media \"$file\" deleted, but not removed from database: $DBI::errstr" );
+                $self->logger->error( "Media \"$file\" deleted, but not removed from database: $DBI::errstr" );
             }
         }else{
-            $self->{logger}->error( "Could not delete file: $file" );
+            $self->logger->error( "Could not delete file: $file" );
         }
     }
 }
@@ -667,10 +726,10 @@ sub del_downloaded{
 sub expire_downloads{
     my( $self, $args ) = @_;
 
-    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT * FROM downloads WHERE " . 
+    my $arr_ref = $self->dbh->selectall_arrayref( "SELECT * FROM downloads WHERE " . 
         "abo_id=$args->{abo_id} AND expired=0 ", { Slice => {} } );
     if( ! defined $arr_ref ){
-        $self->{logger}->error( "Could not retrieve expired downloads: $DBI::errstr" );
+        $self->logger->error( "Could not retrieve expired downloads: $DBI::errstr" );
     }elsif( @{$arr_ref} > 0 ){
         foreach my $download ( @$arr_ref ){
             my $now = date(time);
@@ -678,20 +737,20 @@ sub expire_downloads{
             my $expires_on = date( $download->{time} ) + $exp;
             if( $now > $expires_on ){
                 if( unlink $download->{path} ){
-                    if( defined $self->{dbh}->do( "UPDATE downloads SET expired=1 WHERE path='$download->{path}'" ) ){
-                        $self->{logger}->info( "$download->{path} expired on $expires_on. Deleted." );
+                    if( defined $self->dbh->do( "UPDATE downloads SET expired=1 WHERE path='$download->{path}'" ) ){
+                        $self->logger->info( "$download->{path} expired on $expires_on. Deleted." );
                     }else{
-                        $self->{logger}->error( "Media \"$download->{path}\" deleted, but not removed from database: $DBI::errstr" );
+                        $self->logger->error( "Media \"$download->{path}\" deleted, but not removed from database: $DBI::errstr" );
                     }
                 }else{
-                    $self->{logger}->error( "Could not delete file: $download->{path}" );
+                    $self->logger->error( "Could not delete file: $download->{path}" );
                 }
             }else{
-                $self->{logger}->debug( "$download->{path} expires on $expires_on. Not deleting." );
+                $self->logger->debug( "$download->{path} expires on $expires_on. Not deleting." );
             }
         }
     }else{
-        $self->{logger}->debug( "All downloads already expired." );
+        $self->logger->debug( "All downloads already expired." );
     }
 }
 
@@ -699,11 +758,11 @@ sub requires_download{
     my ($self, $args ) = @_;
 
     if( -e $args->{path} ){
-        $self->{logger}->info( "Media already downloaded: $args->{path}" );
+        $self->logger->info( "Media already downloaded: $args->{path}" );
         return 0;
     }
 
-    my $arr_ref = $self->{dbh}->selectall_arrayref( "SELECT expired FROM downloads WHERE " .
+    my $arr_ref = $self->dbh->selectall_arrayref( "SELECT expired FROM downloads WHERE " .
         "path='$args->{path}'" );
     if( defined $arr_ref ){
         if( @{$arr_ref} == 0 ){
@@ -712,11 +771,11 @@ sub requires_download{
         
         my $expired = @{$arr_ref}[0];
         if( @{$expired}[0] == 1 ){
-            $self->{logger}->info( "Media $args->{path} expired. Not downloading." );
+            $self->logger->info( "Media $args->{path} expired. Not downloading." );
             return 0;
         }
     }else{
-        $self->{logger}->error( "Could not identify required downloads: $DBI::errstr" );
+        $self->logger->error( "Could not identify required downloads: $DBI::errstr" );
     }
     
     return 1;
@@ -724,8 +783,8 @@ sub requires_download{
 
 sub get_url_to_file{
     my( $self, $url, $filename ) = @_;
-    $self->{logger}->debug( "Saving $url to $filename" );
-    my $response = $self->{mech}->get( $url );
+    $self->logger->debug( "Saving $url to $filename" );
+    my $response = $self->mech->get( $url );
     if( ! $response->is_success ){
         die( "get failed: " . $response->status_line . "\n" );
     }
@@ -747,37 +806,27 @@ sub get_url_to_file{
     close FH;
 }
 
-sub init_db{
+sub init_db {
     my( $self ) = @_;
-    if( -f $self->{cache_files}->{db} ){
-        $self->{logger}->debug( "Deleting old database" );
-        unlink( $self->{cache_files}->{db} );
+    $self->logger->debug( sprintf "got cache file for db: %s\n", $self->cache_files->{db} );
+
+    if( -f $self->cache_files->{db} ){
+        $self->logger->debug( "Deleting old database" );
+        unlink( $self->cache_files->{db} );
     }
-    my $dbh = DBI->connect("dbi:SQLite:dbname=" . $self->{cache_files}->{db},"","");
+    my $dbh = DBI->connect("dbi:SQLite:dbname=" . $self->cache_files->{db},"","");
     if( ! $dbh ){
         die( "Could not connect to DB during init_db: $!" );
     }
-    $self->{logger}->debug( "Reading SQL file in" );
+    $self->logger->debug( "Reading SQL file in" );
 
-    if( ! open( FH, "<create_db.sql" ) ){
-        die( "Could not open create_db.sql: $!" );
-    }
-    my $line;
-    my $sql;
-    
-    LINE:
-    while( $line = readline( FH ) ){
-        if( $line =~ m/^\s*$/ || $line =~ m/^\-\-/ || $line =~ m/^\#/ ){
-            next LINE;
-        }
-        chomp( $line );
-        $sql .= $line;
-    }
-    close FH;
+    require 'Video/DE/Mediathek/CreateDB.pm';
+    my $sql_generator = Video::DE::Mediathek::CreateDB->new( dbh => $dbh );
+    my $sql = $sql_generator->create_sql;
 
     my @commands = split( /;/, $sql );
     foreach( @commands ){
-        $self->{logger}->debug( "SQL: $_\n" );
+        $self->logger->debug( "SQL: $_\n" );
         $dbh->do( $_ );
     }
     $dbh->disconnect;
