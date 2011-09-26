@@ -18,6 +18,16 @@ TODO:
 
 * Change module layout.  Use Module::Starter to create typical structure with Makefile.PL and a manifest.
 
+* Connect to database with option RaiseErrors=>1, and wrap any dangerous queries with try/catch blocks (use Try::Tiny)
+
+* Standardise generation of where_sql and where_args for count_videos() and list() to reduce code duplication
+
+* Make unit tests to verify
+  - parsing of sample xml
+  - create_db.sql
+  - loading of sample xml
+  - ...?
+
 DONE:
 * Added air date to db, and use it as a search/count criterion
 * DELETE seems to always succeed, even if the abo does not exist: checking now return value
