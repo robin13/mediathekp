@@ -1,14 +1,9 @@
-package Video::DE::Mediathek::LoggerHandler;
-use Moose;
-use Log::Log4perl;
+package Net::DE::Mediathek::LoggerConfig;
+# Initialise with a default logger configuration, incase the client hasn't done something cleverer
 
-has 'logger' => (
-    is          => 'ro',
-    isa         => 'Log::Log4perl::Logger',
-    required    => 1,
-    lazy        => 1,
-    builder     => '_build_logger',
-    );
+use Moose;
+use MooseX::Log::Log4perl;
+use Log::Log4perl;
 
 has 'log_filename' => (
     is          => 'ro',
@@ -17,7 +12,7 @@ has 'log_filename' => (
     default     => '/tmp/mediathek.log',
     );
 
-sub _build_logger {
+sub init_logger {
     my $self = shift;
 
     my @lines = <DATA>;
@@ -25,8 +20,7 @@ sub _build_logger {
     
     my $log_filename = $self->log_filename;
     $config =~ s/%log_filename%/$log_filename/s;
-    Log::Log4perl->init( \$config );
-    return Log::Log4perl->get_logger();
+    Log::Log4perl->init_once( \$config );
 }
 
 

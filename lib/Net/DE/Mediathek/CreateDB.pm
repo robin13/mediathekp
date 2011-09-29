@@ -1,4 +1,4 @@
-package Video::DE::Mediathek::CreateDB;
+package Net::DE::Mediathek::CreateDB;
 use Moose;
 
 has 'dbh' => ( 
