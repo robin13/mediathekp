@@ -1,0 +1,39 @@
+# Backup and modify in place (instant 
+-b
+
+# Backup extensions ~
+-bext=~
+
+# Line length
+-l=140
+
+# Code block Indentation
+-i=4
+
+# Don't outdent-long-comments
+-nolc
+
+# Continuation Indentation
+-ci=2
+
+# Cuddled Else
+-ce
+
+# Opening Sub braces on the right
+-nsbl
+
+# Closing Token placement
+-cti=0
+
+# Define Horizontal Tightness for...
+-pt=0   # Parenthesis
+-sbt=1  # Square bracket
+-bt=1   # Curly braces
+-bbt=0  # Code blocks
+
+# For loop Semicolon spaces
+-nsfs  # No spaces after Semicolon
+
+# Outdenting Long Quotes
+-nolq # Don't outdent long quotes
+

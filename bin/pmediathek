@@ -9,11 +9,11 @@ use Encode;
 use File::Util;
 use Data::Dumper;
 
-$SIG{'INT'} = 'cleanup';
+$SIG{'INT'}  = 'cleanup';
 $SIG{'QUIT'} = 'cleanup';
 
-my $args = {};
-my $result = GetOptions ( 
+my $args   = {};
+my $result = GetOptions(
     $args,
     'agent=s',
     'cache_dir=s',
@@ -37,32 +37,31 @@ my $result = GetOptions (
     # Required for downloading
     'target_dir=s',
 
-    # Actions: refresh_media, download, count, list, 
+    # Actions: refresh_media, download, count, list,
     # add_abo, del_abo, run_abo, list_abos
     'action=s',
 
     # Help
     'help',
-    );
+);
 
-
-if( ! $result ){
+if ( !$result ) {
     die( "Illegal arguments...\n" );
 }
 
-if( $args->{help} ){
+if ( $args->{help} ) {
     usage();
     exit( 0 );
 }
 
-if( $args->{config} && -f $args->{config} ){
-    eval{
+if ( $args->{config} && -f $args->{config} ) {
+    eval {
         my $load_args = LoadFile( $args->{config} );
-        foreach( keys( %$load_args ) ){
+        foreach ( keys( %$load_args ) ) {
             $args->{$_} = $load_args->{$_};
         }
     };
-    if( $@ ){
+    if ( $@ ) {
         die( "Could not load config from $args->{config}: $@\n" );
     }
 }
@@ -73,7 +72,7 @@ $args->{cache_dir}  ||= '/tmp/mediathek_cache';
 $args->{cache_time} ||= 0;
 $args->{cookie_jar} ||= $args->{cache_dir} . $f->SL() . 'cookie_jar.dat';
 
-if( ! -d $args->{cache_dir} ){
+if ( !-d $args->{cache_dir} ) {
     warn( "Need cache_dir to be defined and exist\n" );
     usage();
     exit;
@@ -81,53 +80,65 @@ if( ! -d $args->{cache_dir} ){
 
 # Pass the memory usage monitor to Mediathek
 my $downloader = TV::Mediathek->new( $args );
-my $logger = Log::Log4perl->get_logger();
+my $logger     = Log::Log4perl->get_logger();
 
 $logger->debug( "Created Mediathek" );
-if( $args->{action} ){
-    if( $args->{action} eq 'refresh_media' ){
+if ( $args->{action} ) {
+    if ( $args->{action} eq 'refresh_media' ) {
+
         # Refresh the media listing?
         $downloader->refresh_media();
-    }elsif( $args->{action} eq 'download' ){
+    } elsif ( $args->{action} eq 'download' ) {
+
         # Download videos
-        $downloader->get_videos( { channel  => $args->{channel},
-                              theme    => $args->{theme},
-                              title    => $args->{title},
-                              date     => $args->{date},
-                              media_id => $args->{id},
-                              test     => $args->{test},
-                          } );
-    }elsif( $args->{action} eq 'count' ){
+        $downloader->get_videos(
+            {
+                channel  => $args->{channel},
+                theme    => $args->{theme},
+                title    => $args->{title},
+                date     => $args->{date},
+                media_id => $args->{id},
+                test     => $args->{test},
+            }
+        );
+    } elsif ( $args->{action} eq 'count' ) {
+
         # Count the number of videos
-        my $count_videos = $downloader->count_videos( { channel  => $args->{channel},
-                                                   theme    => $args->{theme},
-                                                   title    => $args->{title},
-                                                   date     => $args->{date},
-                                                   media_id => $args->{id},
-                                               } );
+        my $count_videos = $downloader->count_videos(
+            {
+                channel  => $args->{channel},
+                theme    => $args->{theme},
+                title    => $args->{title},
+                date     => $args->{date},
+                media_id => $args->{id},
+            }
+        );
         print "Number of videos matching: $count_videos\n";
-    }elsif( $args->{action} eq 'list' ){
+    } elsif ( $args->{action} eq 'list' ) {
         print list( $downloader );
-    }elsif( $args->{action} eq 'init_db' ){
+    } elsif ( $args->{action} eq 'init_db' ) {
         $downloader->init_db();
-    }elsif( $args->{action} =~ /^add_abo,(\w+),(\d+)/ ){
-        $downloader->add_abo( { name => $1,
-                           expires => $2,
-                           channel => $args->{channel},
-                           theme => $args->{theme},
-                           title => $args->{title},
-                       } );
-    }elsif( $args->{action} =~ /^del_abo,(\w+)/ ){
+    } elsif ( $args->{action} =~ /^add_abo,(\w+),(\d+)/ ) {
+        $downloader->add_abo(
+            {
+                name    => $1,
+                expires => $2,
+                channel => $args->{channel},
+                theme   => $args->{theme},
+                title   => $args->{title},
+            }
+        );
+    } elsif ( $args->{action} =~ /^del_abo,(\w+)/ ) {
         $downloader->del_abo( { name => $1 } );
-    }elsif( $args->{action} =~ /^run_abo,(\w+)/ ){
+    } elsif ( $args->{action} =~ /^run_abo,(\w+)/ ) {
         $downloader->run_abo( { name => $1 } );
-    }elsif( $args->{action} eq 'list_abos' ){
+    } elsif ( $args->{action} eq 'list_abos' ) {
         print list_abos( $downloader );
-    }elsif( $args->{action} eq 'list_downloads' ){
+    } elsif ( $args->{action} eq 'list_downloads' ) {
         print list_downloads( $downloader );
-    }elsif( $args->{action} =~ /^del_download,(\d+)/ ){
+    } elsif ( $args->{action} =~ /^del_download,(\d+)/ ) {
         $downloader->del_downloaded( { id => $1 } );
-    }else{
+    } else {
         die( "Unknown action: $args->{action}" );
     }
 }
@@ -136,101 +147,112 @@ $logger->debug( "Just before natural exit" );
 
 exit( 0 );
 
-sub get_log_filename{
+sub get_log_filename {
     return $args->{cache_dir} . $f->SL() . 'debug.log';
 }
 
-sub cleanup{
-    my( $sig ) = @_;
+sub cleanup {
+    my ( $sig ) = @_;
     $logger->warn( "Caught a SIG$sig--shutting down" );
     exit( 0 );
 }
 
-sub list{
-    my( $downloader ) = @_;
-    my $list = $downloader->list({ channel => $args->{channel},
-                              theme   => $args->{theme},
-                              title   => $args->{title},
-                              date    => $args->{date},
-                              media_id => $args->{id},
-                            } );
-    if( ! $list or ! $list->{channels} ){
+sub list {
+    my ( $downloader ) = @_;
+    my $list = $downloader->list(
+        {
+            channel  => $args->{channel},
+            theme    => $args->{theme},
+            title    => $args->{title},
+            date     => $args->{date},
+            media_id => $args->{id},
+        }
+    );
+    if ( !$list or !$list->{channels} ) {
         return "No matches found\n";
     }
 
-    if( ! $list->{themes} ){
+    if ( !$list->{themes} ) {
         return list_channels( $list );
-    }elsif( ! $list->{media} and $list->{themes} ){
+    } elsif ( !$list->{media} and $list->{themes} ) {
         return list_themes( $list );
-    }elsif( $list->{media} and $list->{themes} ){
+    } elsif ( $list->{media} and $list->{themes} ) {
         return list_titles( $list );
-    }else{
+    } else {
         return "No suitable list to print...\n" . Dumper( $list ) . "\n";
     }
 }
 
-sub list_channels{
+sub list_channels {
     my $list = shift;
 
-    my $fmt =  ( ' ' x 4 ) . "%s\n";
+    my $fmt = ( ' ' x 4 ) . "%s\n";
     my $rtn = sprintf( $fmt, 'Channel' );
     $rtn .= sprintf( $fmt, '=======' );
-    foreach( sort ( values( %{ $list->{channels} } ) ) ){
+    foreach ( sort ( values( %{ $list->{channels} } ) ) ) {
         $rtn .= sprintf $fmt, $_;
     }
     return $rtn;
 }
 
-sub list_themes{
+sub list_themes {
     my $list = shift;
 
     # Find length of longest channel name
     my $max_channel = length( "Channel" );
-    foreach( keys( %{ $list->{channels} } ) ){
-        if( ! $max_channel || length( $list->{channels}->{$_} ) > $max_channel ){
+    foreach ( keys( %{ $list->{channels} } ) ) {
+        if ( !$max_channel || length( $list->{channels}->{$_} ) > $max_channel ) {
             $max_channel = length( $list->{channels}->{$_} );
         }
     }
 
-    my $fmt =  ( ' ' x 4 ) . '%-' . $max_channel . "s || %s\n";
+    my $fmt = ( ' ' x 4 ) . '%-' . $max_channel . "s || %s\n";
     my $rtn = sprintf( $fmt, 'Channel', 'Theme' );
     $rtn .= sprintf( $fmt, '=======', '=====' );
-    foreach my $channel_id ( sort{ $list->{channels}->{$a} cmp $list->{channels}->{$b} }( keys( %{ $list->{channels} } ) ) ){
-        foreach my $theme_id ( sort{ $list->{themes}->{$a}->{theme} cmp $list->{themes}->{$b}->{theme} }( keys( %{ $list->{themes} } ) ) ){
+    foreach my $channel_id ( sort { $list->{channels}->{$a} cmp $list->{channels}->{$b} } ( keys( %{ $list->{channels} } ) ) ) {
+        foreach my $theme_id ( sort { $list->{themes}->{$a}->{theme} cmp $list->{themes}->{$b}->{theme} } ( keys( %{ $list->{themes} } ) ) )
+        {
             $rtn .= sprintf( $fmt, $list->{channels}->{$channel_id}, $list->{themes}->{$theme_id}->{theme} );
         }
     }
     return $rtn;
 }
 
-sub list_titles{
+sub list_titles {
     my $list = shift;
+
     # Find length of longest channel name
     my $max_channel = length( 'Channel' );
-    foreach( keys( %{ $list->{channels} } ) ){
-        if( ! $max_channel || length( $list->{channels}->{$_} ) > $max_channel ){
+    foreach ( keys( %{ $list->{channels} } ) ) {
+        if ( !$max_channel || length( $list->{channels}->{$_} ) > $max_channel ) {
             $max_channel = length( $list->{channels}->{$_} );
         }
     }
 
     # Find length of longest theme
     my $max_theme = length( 'Theme' );
-    foreach( keys( %{ $list->{themes} } ) ){
-        if( ! $max_theme || length( $list->{themes}->{$_}->{theme} ) > $max_theme ){
+    foreach ( keys( %{ $list->{themes} } ) ) {
+        if ( !$max_theme || length( $list->{themes}->{$_}->{theme} ) > $max_theme ) {
             $max_theme = length( $list->{themes}->{$_}->{theme} );
         }
     }
 
-    my $fmt =  ( ' ' x 4 ) . '%-5s || %-' . $max_channel . "s || %-" . $max_theme . "s || %-10s || %s\n";
+    my $fmt = ( ' ' x 4 ) . '%-5s || %-' . $max_channel . "s || %-" . $max_theme . "s || %-10s || %s\n";
     my $rtn = sprintf( $fmt, 'ID', 'Channel', 'Theme', 'Date', 'Title' );
     $rtn .= sprintf( $fmt, '==', '=======', '=====', '====', '=====' );
-    foreach my $channel_id ( sort{ $list->{channels}->{$a} cmp $list->{channels}->{$b} }( keys( %{ $list->{channels} } ) ) ){
-        foreach my $theme_id ( sort{ $list->{themes}->{$a}->{theme} cmp $list->{themes}->{$b}->{theme} }( keys( %{ $list->{themes} } ) ) ){
-            if( $list->{themes}->{$theme_id}->{channel_id} eq $channel_id ){
-                foreach my $media_id ( sort{ $list->{media}->{$a}->{title} cmp $list->{media}->{$b}->{title} }( keys( %{ $list->{media} } ) ) ){
-                    if( $list->{media}->{$media_id}->{theme_id} eq $theme_id ){
-                        $rtn .= sprintf( $fmt, $media_id, $list->{channels}->{$channel_id},
-                            $list->{themes}->{$theme_id}->{theme}, $list->{media}->{$media_id}->{date},
+    foreach my $channel_id ( sort { $list->{channels}->{$a} cmp $list->{channels}->{$b} } ( keys( %{ $list->{channels} } ) ) ) {
+        foreach my $theme_id ( sort { $list->{themes}->{$a}->{theme} cmp $list->{themes}->{$b}->{theme} } ( keys( %{ $list->{themes} } ) ) )
+        {
+            if ( $list->{themes}->{$theme_id}->{channel_id} eq $channel_id ) {
+                foreach
+                  my $media_id ( sort { $list->{media}->{$a}->{title} cmp $list->{media}->{$b}->{title} } ( keys( %{ $list->{media} } ) ) )
+                {
+                    if ( $list->{media}->{$media_id}->{theme_id} eq $theme_id ) {
+                        $rtn .= sprintf( $fmt,
+                            $media_id,
+                            $list->{channels}->{$channel_id},
+                            $list->{themes}->{$theme_id}->{theme},
+                            $list->{media}->{$media_id}->{date},
                             $list->{media}->{$media_id}->{title} );
                     }
                 }
@@ -241,11 +263,11 @@ sub list_titles{
 }
 
 sub list_abos {
-    my( $downloader ) = @_;
+    my ( $downloader ) = @_;
     my @list = $downloader->get_abos();
 
     my $rtn = "Abo name\n========\n";
-    for( @list ){
+    for ( @list ) {
         $rtn .= "@{$_}\n";
     }
 
@@ -253,14 +275,14 @@ sub list_abos {
 }
 
 sub list_downloads {
-    my( $downloader ) = @_;
+    my ( $downloader ) = @_;
     my @list = $downloader->get_downloaded_media();
 
     # find length of longest abo name
     my $max_abo = length( 'Abo' );
-    foreach my $download ( @list ){
+    foreach my $download ( @list ) {
         my $name_length = length( $download->{name} ) || 0;
-        if( $name_length > $max_abo ){
+        if ( $name_length > $max_abo ) {
             $max_abo = $name_length;
         }
     }
@@ -272,13 +294,12 @@ sub list_downloads {
         $rtn .= sprintf( $fmt, $row->{media_id}, $row->{name} || "N/A", $row->{time}, $row->{path} );
     }
 
-    $rtn .= "\n" . scalar(@list) . " downloaded videos.\n\n";
+    $rtn .= "\n" . scalar( @list ) . " downloaded videos.\n\n";
 
     return $rtn;
 }
 
-
-sub usage{
+sub usage {
     print qq{Usage:
   ./mediathek.pl [options]
 

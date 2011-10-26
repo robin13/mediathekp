@@ -1,34 +1,34 @@
 package TV::Mediathek::CreateDB;
 use Moose;
 
-has 'dbh' => ( 
-    is          => 'ro', 
-    isa         => 'DBI::db',
-    required    => 1,
-    );
+has 'dbh' => (
+    is       => 'ro',
+    isa      => 'DBI::db',
+    required => 1,
+);
 
 has 'create_sql' => (
-    is          => 'ro',
-    isa         => 'Str',
-    lazy        => 1,
-    builder     => '_build_create_sql' );
+    is      => 'ro',
+    isa     => 'Str',
+    lazy    => 1,
+    builder => '_build_create_sql'
+);
 
 sub _build_create_sql {
-    my $self = shift;
+    my $self  = shift;
     my @lines = <DATA>;
-    
+
     my $sql = '';
-    LINE:
-    foreach my $line( @lines ) {
-        if( $line =~ m/^\s*$/ || $line =~ m/^\-\-/ || $line =~ m/^\#/ ){
+  LINE:
+    foreach my $line ( @lines ) {
+        if ( $line =~ m/^\s*$/ || $line =~ m/^\-\-/ || $line =~ m/^\#/ ) {
             next LINE;
         }
         chomp( $line );
         $sql .= $line;
     }
-    return $sql
+    return $sql;
 }
-    
 
 1;
 

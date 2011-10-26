@@ -1,4 +1,5 @@
 package TV::Mediathek::LoggerConfig;
+
 # Initialise with a default logger configuration, incase the client hasn't done something cleverer
 
 use Moose;
@@ -6,23 +7,22 @@ use MooseX::Log::Log4perl;
 use Log::Log4perl;
 
 has 'log_filename' => (
-    is          => 'ro',
-    isa         => 'Str',
-    required    => 1,
-    default     => '/tmp/mediathek.log',
-    );
+    is       => 'ro',
+    isa      => 'Str',
+    required => 1,
+    default  => '/tmp/mediathek.log',
+);
 
 sub init_logger {
     my $self = shift;
 
     my @lines = <DATA>;
     my $config = join( '', @lines );
-    
+
     my $log_filename = $self->log_filename;
     $config =~ s/%log_filename%/$log_filename/s;
     Log::Log4perl->init_once( \$config );
 }
-
 
 1;
 
