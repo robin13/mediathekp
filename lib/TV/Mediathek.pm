@@ -1,4 +1,4 @@
-package Net::DE::Mediathek;
+package TV::Mediathek;
 use Moose;
 with 'MooseX::Log::Log4perl';
 
@@ -19,7 +19,7 @@ use Lingua::DE::ASCII;
 use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError) ;
 
 use Video::Flvstreamer 0.03;
-use Net::DE::Mediathek::LoggerConfig;
+use TV::Mediathek::LoggerConfig;
 
 has 'proxy' => (
     is          => 'ro',
@@ -114,7 +114,7 @@ after 'new' => sub {
     # In case a logger hasn't been created elsewhere, this will initialise the default logger
     # for the context
     # It uses init_once so existing configurations won't be clobbered
-    my $logger_config = Net::DE::Mediathek::LoggerConfig->new();
+    my $logger_config = TV::Mediathek::LoggerConfig->new();
     $logger_config->init_logger();
 };
 
@@ -259,7 +259,7 @@ sub refresh_media{
         $sql = 'UPDATE sources SET tried=1 WHERE url=?';
         my $sth_update = $self->dbh->prepare( $sql );
         my $got_media = undef;
-      MEDIA_SOURCE:
+        
         do{
             $sth_select->execute();
             my $row = $sth_select->fetchrow_hashref();
@@ -279,9 +279,10 @@ sub refresh_media{
             if( ! anyuncompress $self->cache_files->{media_zip} => $self->cache_files->{media} ){
                 $self->log->warn( $AnyUncompressError );
                 $sth_update->execute( $row->{url} );
-                next MEDIA_SOURCE;
+                # next does not work in do/while loop...
+            }else{
+                $got_media = 1;
             }
-            $got_media = 1;
         }while( ! $got_media );
         $sth_select->finish();
         $sth_update->finish();

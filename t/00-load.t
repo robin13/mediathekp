@@ -3,7 +3,7 @@
 use Test::More tests => 1;
 
 BEGIN {
-    use_ok( 'Video::DE::Mediathek' ) || print "Bail out!\n";
+    use_ok( 'TV::Mediathek' ) || print "Bail out!\n";
 }
 
-diag( "Testing Video::DE::Mediathek $Video::DE::Mediathek::VERSION, Perl $], $^X" );
+diag( "TV::Mediathek $TV::Mediathek::VERSION, Perl $], $^X" );

@@ -4,10 +4,10 @@ use warnings;
 use ExtUtils::MakeMaker;
 
 WriteMakefile(
-    NAME                => 'Net::DE::Mediathek',
+    NAME                => 'TV::Mediathek',
     AUTHOR              => q{Robin Clarke <perl@robinclarke.net>},
-    VERSION_FROM        => 'lib/Net/DE/Mediathek.pm',
-    ABSTRACT_FROM       => 'lib/Net/DE/Mediathek.pm',
+    VERSION_FROM        => 'lib/TV/Mediathek.pm',
+    ABSTRACT_FROM       => 'lib/TV/Mediathek.pm',
     ($ExtUtils::MakeMaker::VERSION >= 6.3002
       ? ('LICENSE'=> 'perl')
       : ()),
@@ -16,5 +16,5 @@ WriteMakefile(
         'Test::More' => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
-    clean               => { FILES => 'Net-DE-Mediathek-*' },
+    clean               => { FILES => 'TV-Mediathek-*' },
 );

@@ -1,4 +1,4 @@
-package Net::DE::Mediathek::LoggerConfig;
+package TV::Mediathek::LoggerConfig;
 # Initialise with a default logger configuration, incase the client hasn't done something cleverer
 
 use Moose;

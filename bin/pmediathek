@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
-use Net::DE::Mediathek;
+use TV::Mediathek;
 use Getopt::Long;
 use Log::Log4perl;
 use YAML::Any qw/Dump LoadFile DumpFile/;
@@ -80,17 +80,17 @@ if( ! -d $args->{cache_dir} ){
 }
 
 # Pass the memory usage monitor to Mediathek
-my $media = Net::DE::Mediathek->new( $args );
+my $downloader = TV::Mediathek->new( $args );
 my $logger = Log::Log4perl->get_logger();
 
 $logger->debug( "Created Mediathek" );
 if( $args->{action} ){
     if( $args->{action} eq 'refresh_media' ){
         # Refresh the media listing?
-        $media->refresh_media();
+        $downloader->refresh_media();
     }elsif( $args->{action} eq 'download' ){
         # Download videos
-        $media->get_videos( { channel  => $args->{channel},
+        $downloader->get_videos( { channel  => $args->{channel},
                               theme    => $args->{theme},
                               title    => $args->{title},
                               date     => $args->{date},
@@ -99,7 +99,7 @@ if( $args->{action} ){
                           } );
     }elsif( $args->{action} eq 'count' ){
         # Count the number of videos
-        my $count_videos = $media->count_videos( { channel  => $args->{channel},
+        my $count_videos = $downloader->count_videos( { channel  => $args->{channel},
                                                    theme    => $args->{theme},
                                                    title    => $args->{title},
                                                    date     => $args->{date},
@@ -107,26 +107,26 @@ if( $args->{action} ){
                                                } );
         print "Number of videos matching: $count_videos\n";
     }elsif( $args->{action} eq 'list' ){
-        print list( $media );
+        print list( $downloader );
     }elsif( $args->{action} eq 'init_db' ){
-        $media->init_db();
+        $downloader->init_db();
     }elsif( $args->{action} =~ /^add_abo,(\w+),(\d+)/ ){
-        $media->add_abo( { name => $1,
+        $downloader->add_abo( { name => $1,
                            expires => $2,
                            channel => $args->{channel},
                            theme => $args->{theme},
                            title => $args->{title},
                        } );
     }elsif( $args->{action} =~ /^del_abo,(\w+)/ ){
-        $media->del_abo( { name => $1 } );
+        $downloader->del_abo( { name => $1 } );
     }elsif( $args->{action} =~ /^run_abo,(\w+)/ ){
-        $media->run_abo( { name => $1 } );
+        $downloader->run_abo( { name => $1 } );
     }elsif( $args->{action} eq 'list_abos' ){
-        print list_abos( $media );
+        print list_abos( $downloader );
     }elsif( $args->{action} eq 'list_downloads' ){
-        print list_downloads( $media );
+        print list_downloads( $downloader );
     }elsif( $args->{action} =~ /^del_download,(\d+)/ ){
-        $media->del_downloaded( { id => $1 } );
+        $downloader->del_downloaded( { id => $1 } );
     }else{
         die( "Unknown action: $args->{action}" );
     }
@@ -147,8 +147,8 @@ sub cleanup{
 }
 
 sub list{
-    my( $media ) = @_;
-    my $list = $media->list({ channel => $args->{channel},
+    my( $downloader ) = @_;
+    my $list = $downloader->list({ channel => $args->{channel},
                               theme   => $args->{theme},
                               title   => $args->{title},
                               date    => $args->{date},
@@ -240,9 +240,9 @@ sub list_titles{
     return $rtn;
 }
 
-sub list_abos{
-    my( $media ) = @_;
-    my @list = $media->get_abos();
+sub list_abos {
+    my( $downloader ) = @_;
+    my @list = $downloader->get_abos();
 
     my $rtn = "Abo name\n========\n";
     for( @list ){
@@ -252,9 +252,9 @@ sub list_abos{
     return $rtn;
 }
 
-sub list_downloads{
-    my( $media ) = @_;
-    my @list = $media->get_downloaded_media();
+sub list_downloads {
+    my( $downloader ) = @_;
+    my @list = $downloader->get_downloaded_media();
 
     # find length of longest abo name
     my $max_abo = length( 'Abo' );
