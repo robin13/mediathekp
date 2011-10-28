@@ -21,88 +21,119 @@ use IO::Uncompress::AnyUncompress qw(anyuncompress $AnyUncompressError);
 use Video::Flvstreamer 0.03;
 use TV::Mediathek::LoggerConfig;
 
-has 'proxy' => (
-    is  => 'ro',
-    isa => 'Str',
-);
+=head1 NAME
 
-has 'agent' => (
-    is  => 'ro',
-    isa => 'Str',
-);
+TV::Mediathek - Access to Mediathek
 
-has 'cookie_jar' => (
-    is  => 'ro',
-    isa => 'Str',
-);
+=head1 VERSION
 
-has 'mech' => (
-    is      => 'ro',
-    isa     => 'WWW::Mechanize',
-    lazy    => 1,
-    builder => '_build_mech',
-);
+Version 0.01
 
-has 'flvstreamer_binary' => (
-    is       => 'ro',
-    isa      => 'Str',           # TODO: RCL 2011-09-27 Test for executable binary
-    required => 1,
-    default  => 'flvstreamer',
-);
+=cut
 
-has 'cache_time' => (
-    is       => 'ro',
-    isa      => 'Int',
-    required => 1,
-    default  => 3600,
-);
+our $VERSION = '0.01';
 
-has 'sqlite_cache_size' => (
-    is       => 'ro',
-    isa      => 'Int',
-    required => 1,
-    default  => 80000,    # Allow sqlite to use 80MB in memory for caching
-);
+=head1 SYNOPSIS
 
-has 'cache_dir' => (
-    is       => 'ro',
-    isa      => 'Str',    # TODO: RCL 2011-09-27 Test for directory exists
-    required => 1,
-);
+List and download TV programs from German and French public TV Mediathek repositories.
 
-has 'target_dir' => (
-    is       => 'ro',
-    isa      => 'Str',    # TODO: RCL 2011-09-27 Test for directory exists
-    required => 1,
-);
+Based on (and using some resources from) the original Java MediathekView script:
+http://zdfmediathk.sourceforge.net/index.html
 
-has 'socks' => (
-    is  => 'ro',
-    isa => 'Str',
-);
+=head1 METHODS
 
-has 'flv' => (
-    is      => 'ro',
-    isa     => 'Video::Flvstreamer',
-    lazy    => 1,
-    builder => '_build_flv',
-);
+=head2 new
 
-has 'cache_files' => (
-    is      => 'ro',
-    isa     => 'HashRef',
-    builder => '_build_cache_files',
-    lazy    => 1,
-);
+Create new instance of TV::Mediathek
 
-has 'dbh' => (
-    is      => 'ro',
-    isa     => 'DBI::db',
-    lazy    => 1,
-    builder => '_build_dbh',
-);
+=head3 PARAMS
 
-has 'file_util' => (
+=over 2
+
+=item proxy <Str>
+
+Address of proxy server to use.  e.g. http://proxy.example.com:8001/
+
+Default: undef
+
+=item socks <Str>
+
+Address of socks server to use for download.
+
+Default: undef
+
+=item agent <Str>
+
+User agent string to use.
+
+Default: LWP::UserAgent default
+
+=item cookie_jar <Str>
+
+File to use as a cookie jar
+
+Default: undef
+
+=item mech <WWW::Mechanize>
+
+If you already have a WWW::Mechanize object, you can pass it here, otherwise one will be created for you
+
+=item flvstreamer_binary <Str>
+
+Path to flvstreamer binary
+
+Default: 'flvstreamer'
+
+=item cache_time <Int>
+
+Time in seconds to read from cached sources before refreshing.
+
+Default: 3600
+
+=item sql_cache_size <Int>
+
+Set memory in bytes  which SQLite can use for caching.
+
+Default: 80000
+
+=item cache_dir <Str>
+
+Directory to cache files in
+
+Required.  No Default.
+
+=item target_dir <Str>
+
+Directory to which video files should be saved
+
+=back
+
+=cut
+
+has 'proxy'              => ( is => 'ro', isa => 'Str', );
+has 'socks'              => ( is => 'ro', isa => 'Str', );
+has 'agent'              => ( is => 'ro', isa => 'Str', );
+has 'cookie_jar'         => ( is => 'ro', isa => 'Str', );
+has 'mech'               => ( is => 'ro', isa => 'WWW::Mechanize', lazy_build => 1 );
+has 'flvstreamer_binary' => ( is => 'ro', isa => 'Str', required => 1, default => 'flvstreamer', );
+
+# TODO: RCL 2011-09-27 Test for executable binary
+
+has 'cache_time'        => ( is => 'ro', isa => 'Int', required => 1, default => 3600, );
+has 'sqlite_cache_size' => ( is => 'ro', isa => 'Int', required => 1, default => 80000, );  # Allow sqlite to use 80MB in memory for caching
+has 'cache_dir' => ( is => 'ro', isa => 'Str', required => 1, );
+
+# TODO: RCL 2011-09-27 Test for directory exists
+
+has 'target_dir' => ( is => 'ro', isa => 'Str', required => 1, );
+
+# TODO: RCL 2011-09-27 Test for directory exists
+
+# Some internals - do not need to be in pod documentation
+has 'flv'         => ( is => 'ro', isa => 'Video::Flvstreamer', lazy_build => 1 );
+has 'cache_files' => ( is => 'ro', isa => 'HashRef',            lazy_build => 1 );
+has 'dbh'         => ( is => 'ro', isa => 'DBI::db',            lazy_build => 1 );
+has 'file_util'   => (
     is       => 'ro',
     isa      => 'File::Util',
     required => 1,
@@ -110,6 +141,7 @@ has 'file_util' => (
     default  => sub { File::Util->new() },
 );
 
+# Things to be done after the object has been instanciated
 after 'new' => sub {
 
     # In case a logger hasn't been created elsewhere, this will initialise the default logger
@@ -119,6 +151,7 @@ after 'new' => sub {
     $logger_config->init_logger();
 };
 
+# Build the WWW::Mechanize object
 sub _build_mech {
     my $self = shift;
 
@@ -129,6 +162,7 @@ sub _build_mech {
     return $mech;
 }
 
+# Build the Video::Flvstreamer object
 sub _build_flv {
     my $self = shift;
 
@@ -145,6 +179,7 @@ sub _build_flv {
 
 }
 
+# Create a hashref of the paths for the various cache files
 sub _build_cache_files {
     my $self = shift;
 
@@ -157,6 +192,7 @@ sub _build_cache_files {
     return \%cache_files;
 }
 
+# Create the database handle to the SQLite database
 sub _build_dbh {
     my $self = shift;
 
@@ -178,6 +214,13 @@ sub _build_dbh {
     $dbh->do( "PRAGMA cache_size=" . $self->sqlite_cache_size );
     return $dbh;
 }
+
+=head2 refresh_sources
+
+Download the sources into the sources table in the databse.  All current entries are deleted from the
+table, and the news entries are added
+
+=cut
 
 sub refresh_sources {
     my $self = shift;
@@ -206,7 +249,8 @@ sub refresh_sources {
     my $sth = $self->dbh->prepare( $sql );
     $sth->execute;
 
-    my $t = XML::Twig->new( twig_handlers => { Server => \&source_to_db, }, );
+    # Prepare the Twig handler and graft in the database statement handler for inserting the new values
+    my $t = XML::Twig->new( twig_handlers => { Server => \&_source_to_db, }, );
     $sql                = 'INSERT INTO sources ( url, time, tried ) VALUES( ?, ?, 0 )';
     $sth                = $self->dbh->prepare( $sql );
     $t->{mediathek_sth} = $sth;
@@ -218,7 +262,9 @@ sub refresh_sources {
     $sth->finish;
 }
 
-sub source_to_db {
+# Private XML::Twig twig handler method to parse the source XML file and insert the results
+# into the database
+sub _source_to_db {
     my ( $t, $section ) = @_;
 
     my %values;
@@ -234,6 +280,16 @@ sub source_to_db {
     my $date = Class::Date->new( [ $year, $month, $day, $hour, $min, $sec ] );
     $t->{mediathek_sth}->execute( $values{Download_Filme_1}, $date );
 }
+
+=head2 refresh_media
+
+Refresh the media listing.
+This will try each of the sources from the sources table in the database, ordered by time (youngest first)
+and if possible download and import the resulting XML into the database.
+Prior to import into the database, all existing data from the channels, themes, media and map_media tables
+will be deleted.
+
+=cut
 
 sub refresh_media {
     my ( $self ) = @_;
@@ -349,6 +405,8 @@ sub refresh_media {
     $self->log->debug( __PACKAGE__ . "->refresh_media end" );
 }
 
+# Local XML::Twig twig handler method for importing media to the database.
+# Expects to receive a twig with the required statement handlers initialised.
 # <Filme><Nr>0000</Nr><Sender>3Sat</Sender><Thema>3sat.full</Thema><Titel>Mediathek-Beiträge</Titel><Datum>04.09.2011</Datum><Zeit>19:23:11</Zeit><Url>http://wstreaming.zdf.de/3sat/veryhigh/110103_jazzbaltica2010ceu_musik.asx</Url><UrlOrg>http://wstreaming.zdf.de/3sat/300/110103_jazzbaltica2010ceu_musik.asx</UrlOrg><Datei>110103_jazzbaltica2010ceu_musik.asx</Datei><Film-alt>false</Film-alt></Filme>
 sub media_to_db {
     my ( $t, $section ) = @_;
@@ -419,6 +477,13 @@ sub media_to_db {
     $section->purge;
 }
 
+=head2 count_videos
+
+Count the number of videos matching your search criteria.
+
+=cut
+
+# TODO: RCL 2011-10-28 Document search options
 sub count_videos {
     my ( $self, $args ) = @_;
     my $sql =
@@ -463,6 +528,13 @@ sub count_videos {
     return $row->{count_videos};
 }
 
+=head2 list
+
+List the videos matching your search criteria.
+
+=cut
+
+# TODO: RCL 2011-10-28 Document search options
 sub list {
     my ( $self, $args ) = @_;
 
@@ -554,6 +626,13 @@ sub list {
     return $out;
 }
 
+=head2 get_videos
+
+Download (to the target_dir) the videos matching your search criteria.
+
+=cut
+
+# TODO: RCL 2011-10-28 Document search options
 sub get_videos {
     my ( $self, $args ) = @_;
 
@@ -835,5 +914,52 @@ sub init_db {
     }
     $dbh->disconnect;
 }
+
+=head1 AUTHOR
+
+Robin Clarke, C<< <perl at robinclarke.net> >>
+
+=head1 BUGS
+
+Please report any bugs or feature requests to L<https://github.com/robin13/mediathekp>
+
+=head1 SUPPORT
+
+You can find documentation for this module with the perldoc command.
+
+    perldoc TV::Mediathek
+
+
+You can also look for information at:
+
+=over 4
+
+=item * Github
+
+L<https://github.com/robin13/mediathekp>
+
+=item * Search CPAN
+
+L<http://search.cpan.org/dist/TV/Mediathek/>
+
+=back
+
+
+=head1 ACKNOWLEDGEMENTS
+
+Thanks to Michael Unterkalmsteiner for added functionality!
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright 2011 Robin Clarke.
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of either: the GNU General Public License as published
+by the Free Software Foundation; or the Artistic License.
+
+See http://dev.perl.org/licenses/ for more information.
+
+
+=cut
 
 1;
