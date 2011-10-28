@@ -62,6 +62,12 @@ Address of socks server to use for download.
 
 Default: undef
 
+=item timeout <Int>
+
+Timeout in seconds while downloading video
+
+Default: 10
+
 =item agent <Str>
 
 User agent string to use.
@@ -106,16 +112,28 @@ Required.  No Default.
 
 Directory to which video files should be saved
 
+=item date_in_filename <Bool>
+
+Should the date of the programme be included in the filename.
+
+With: 2011-10-22_Mit_offenen_Karten.avi
+
+Without: Mit_offenen_Karten.avi
+
+Default: 1
+
 =back
 
 =cut
 
 has 'proxy'              => ( is => 'ro', isa => 'Str', );
 has 'socks'              => ( is => 'ro', isa => 'Str', );
+has 'timeout'            => ( is => 'ro', isa => 'Int', required => 1, default => 10  );
 has 'agent'              => ( is => 'ro', isa => 'Str', );
 has 'cookie_jar'         => ( is => 'ro', isa => 'Str', );
+has 'date_in_filename'   => ( is => 'ro', isa => 'Bool', required => 1, default => 1 );
 has 'mech'               => ( is => 'ro', isa => 'WWW::Mechanize', lazy_build => 1 );
-has 'flvstreamer_binary' => ( is => 'ro', isa => 'Str', required => 1, default => 'flvstreamer', );
+has 'flvstreamer_binary' => ( is => 'ro', isa => 'Str', required => 1, default => '/usr/bin/flvstreamer', );
 
 # TODO: RCL 2011-09-27 Test for executable binary
 
@@ -652,6 +670,7 @@ sub get_videos {
         my $video      = $list->{media}->{$media_id};
         my $theme      = to_ascii( $list->{themes}->{ $video->{theme_id} }->{theme} );
         my $channel    = to_ascii( $list->{channels}->{ $list->{themes}->{ $video->{theme_id} }->{channel_id} } );
+        my $date       = $list->{media}->{$media_id}->{date};
         my $target_dir = catfile( $self->target_dir, $channel, $theme );
         $target_dir =~ s/\s/_/g;
         $self->log->debug( "Target dir: $target_dir" );
@@ -667,6 +686,10 @@ sub get_videos {
         $title =~ s/\)/_/g;
         $title =~ s/\//_/g;
         $title =~ s/\W/_/g;
+        if( $self->date_in_filename ){ 
+            $title = sprintf( '%s_%s', $date, $title );
+        }
+        
         my $target_path = catfile( $target_dir, $title . '.avi' );
         if ( $self->requires_download( { path => $target_path } ) && !$args->{test} ) {
             $self->log->info(
@@ -903,8 +926,8 @@ sub init_db {
     }
     $self->log->debug( "Reading SQL file in" );
 
-    require 'Net/DE/Mediathek/CreateDB.pm';
-    my $sql_generator = Net::DE::Mediathek::CreateDB->new( dbh => $dbh );
+    require 'TV/Mediathek/CreateDB.pm';
+    my $sql_generator = TV::Mediathek::CreateDB->new( dbh => $dbh );
     my $sql = $sql_generator->create_sql;
 
     my @commands = split( /;/, $sql );

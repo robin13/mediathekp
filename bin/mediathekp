@@ -70,6 +70,7 @@ my $f = File::Util->new();
 $args->{agent}      ||= 'Mediathek-PL/0.2';
 $args->{cache_dir}  ||= '/tmp/mediathek_cache';
 $args->{cache_time} ||= 0;
+$args->{timeout}    ||= 10;
 $args->{cookie_jar} ||= $args->{cache_dir} . $f->SL() . 'cookie_jar.dat';
 
 if ( !-d $args->{cache_dir} ) {
