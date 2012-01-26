@@ -1,5 +1,23 @@
 package TV::Mediathek::CreateDB;
 use Moose;
+=head1 NAME
+
+TV::Mediathek::CreateDB - Create the SQLite DB for storing media data
+
+=head1 VERSION
+
+Version 0.01
+
+=cut
+
+our $VERSION = '0.01';
+
+=head1 SYNOPSIS
+
+  my $create_db = TV::Mediathek::CreateDB();
+  my $sql = $create_db->create_sql();
+
+=cut
 
 has 'dbh' => (
     is       => 'ro',
@@ -31,6 +49,21 @@ sub _build_create_sql {
 }
 
 1;
+=head1 AUTHOR
+
+Robin Clarke, C<< <perl at robinclarke.net> >>
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright 2011 Robin Clarke.
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of either: the GNU General Public License as published
+by the Free Software Foundation; or the Artistic License.
+
+See http://dev.perl.org/licenses/ for more information.
+
+=cut
 
 __DATA__
 

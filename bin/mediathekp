@@ -8,13 +8,15 @@ use YAML::Any qw/Dump LoadFile DumpFile/;
 use Encode;
 use File::Util;
 use Data::Dumper;
+use File::HomeDir;
+use File::Spec::Functions qw/catfile/;
 
 $SIG{'INT'}  = 'cleanup';
 $SIG{'QUIT'} = 'cleanup';
 
-my $args   = {};
+my %params;
 my $result = GetOptions(
-    $args,
+    \%params,
     'agent=s',
     'cache_dir=s',
     'cache_time=i',
@@ -45,102 +47,112 @@ my $result = GetOptions(
     'help',
 );
 
+
 if ( !$result ) {
     die( "Illegal arguments...\n" );
 }
 
-if ( $args->{help} ) {
+if ( $params{help} ) {
     usage();
     exit( 0 );
 }
 
-if ( $args->{config} && -f $args->{config} ) {
+# Default params
+%params = (
+    config  => catfile( File::HomeDir->my_home(), '.mediathekp.yaml' ),
+    %params
+    );
+
+if ( $params{config} && -f $params{config} ) {
     eval {
-        my $load_args = LoadFile( $args->{config} );
-        foreach ( keys( %$load_args ) ) {
-            $args->{$_} = $load_args->{$_};
+        my $load_params = LoadFile( $params{config} );
+        foreach ( keys( %$load_params ) ) {
+            $params{$_} = $load_params->{$_};
         }
     };
     if ( $@ ) {
-        die( "Could not load config from $args->{config}: $@\n" );
+        die( "Could not load config from $params{config}: $@\n" );
     }
 }
 
 my $f = File::Util->new();
-$args->{agent}      ||= 'Mediathek-PL/0.2';
-$args->{cache_dir}  ||= '/tmp/mediathek_cache';
-$args->{cache_time} ||= 0;
-$args->{timeout}    ||= 10;
-$args->{cookie_jar} ||= $args->{cache_dir} . $f->SL() . 'cookie_jar.dat';
+%params = (
+    agent       => 'Mediathek-PL/0.2',
+    cache_dir   => '/tmp/mediathek_cache',
+    cache_time  => 0,
+    timeout     => 10,
+    cookie_jar  => catfile( $params{cache_dir}, 'cookie_jar.dat' ),
+    %params,
+    );
 
-if ( !-d $args->{cache_dir} ) {
-    warn( "Need cache_dir to be defined and exist\n" );
+if ( ! -d $params{cache_dir} ) {
+    warn( sprintf( "cache_dir (%s) must exist\n", $params{cache_dir} ) );
     usage();
     exit;
 }
 
 # Pass the memory usage monitor to Mediathek
-my $downloader = TV::Mediathek->new( $args );
+my $downloader = TV::Mediathek->new( %params );
 my $logger     = Log::Log4perl->get_logger();
 
 $logger->debug( "Created Mediathek" );
-if ( $args->{action} ) {
-    if ( $args->{action} eq 'refresh_media' ) {
+if ( $params{action} ) {
+    if ( $params{action} eq 'refresh_media' ) {
 
         # Refresh the media listing?
         $downloader->refresh_media();
-    } elsif ( $args->{action} eq 'download' ) {
+    } elsif ( $params{action} eq 'download' ) {
 
         # Download videos
         $downloader->get_videos(
             {
-                channel  => $args->{channel},
-                theme    => $args->{theme},
-                title    => $args->{title},
-                date     => $args->{date},
-                media_id => $args->{id},
-                test     => $args->{test},
+                channel  => $params{channel},
+                theme    => $params{theme},
+                title    => $params{title},
+                date     => $params{date},
+                media_id => $params{id},
+                test     => $params{test},
             }
         );
-    } elsif ( $args->{action} eq 'count' ) {
+    } elsif ( $params{action} eq 'count' ) {
 
         # Count the number of videos
         my $count_videos = $downloader->count_videos(
             {
-                channel  => $args->{channel},
-                theme    => $args->{theme},
-                title    => $args->{title},
-                date     => $args->{date},
-                media_id => $args->{id},
+                channel  => $params{channel},
+                theme    => $params{theme},
+                title    => $params{title},
+                date     => $params{date},
+                media_id => $params{id},
             }
         );
         print "Number of videos matching: $count_videos\n";
-    } elsif ( $args->{action} eq 'list' ) {
+    } elsif ( $params{action} eq 'list' ) {
         print list( $downloader );
-    } elsif ( $args->{action} eq 'init_db' ) {
+    } elsif ( $params{action} eq 'init_db' ) {
         $downloader->init_db();
-    } elsif ( $args->{action} =~ /^add_abo,(\w+),(\d+)/ ) {
+    } elsif ( $params{action} =~ /^add_abo,(\w+),(\d+)/ ) {
         $downloader->add_abo(
             {
                 name    => $1,
                 expires => $2,
-                channel => $args->{channel},
-                theme   => $args->{theme},
-                title   => $args->{title},
+                channel => $params{channel},
+                theme   => $params{theme},
+                title   => $params{title},
             }
         );
-    } elsif ( $args->{action} =~ /^del_abo,(\w+)/ ) {
+    } elsif ( $params{action} =~ /^del_abo,(\w+)/ ) {
         $downloader->del_abo( { name => $1 } );
-    } elsif ( $args->{action} =~ /^run_abo,(\w+)/ ) {
+    } elsif ( $params{action} =~ /^run_abo,(\w+)/ ) {
         $downloader->run_abo( { name => $1 } );
-    } elsif ( $args->{action} eq 'list_abos' ) {
+    } elsif ( $params{action} eq 'list_abos' ) {
         print list_abos( $downloader );
-    } elsif ( $args->{action} eq 'list_downloads' ) {
+    } elsif ( $params{action} eq 'list_downloads' ) {
         print list_downloads( $downloader );
-    } elsif ( $args->{action} =~ /^del_download,(\d+)/ ) {
+    } elsif ( $params{action} =~ /^del_download,(\d+)/ ) {
         $downloader->del_downloaded( { id => $1 } );
     } else {
-        die( "Unknown action: $args->{action}" );
+        die( "Unknown action: $params{action}" );
     }
 }
 
@@ -149,7 +161,7 @@ $logger->debug( "Just before natural exit" );
 exit( 0 );
 
 sub get_log_filename {
-    return $args->{cache_dir} . $f->SL() . 'debug.log';
+    return $params{cache_dir} . $f->SL() . 'debug.log';
 }
 
 sub cleanup {
@@ -162,11 +174,11 @@ sub list {
     my ( $downloader ) = @_;
     my $list = $downloader->list(
         {
-            channel  => $args->{channel},
-            theme    => $args->{theme},
-            title    => $args->{title},
-            date     => $args->{date},
-            media_id => $args->{id},
+            channel  => $params{channel},
+            theme    => $params{theme},
+            title    => $params{title},
+            date     => $params{date},
+            media_id => $params{id},
         }
     );
     if ( !$list or !$list->{channels} ) {

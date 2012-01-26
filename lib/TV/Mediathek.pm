@@ -239,7 +239,6 @@ Download the sources into the sources table in the databse.  All current entries
 table, and the news entries are added
 
 =cut
-
 sub refresh_sources {
     my $self = shift;
 
@@ -308,7 +307,6 @@ Prior to import into the database, all existing data from the channels, themes, 
 will be deleted.
 
 =cut
-
 sub refresh_media {
     my ( $self ) = @_;
 
@@ -374,7 +372,7 @@ sub refresh_media {
     $self->dbh->do( 'DELETE FROM map_media' );
     $self->dbh->do( 'DELETE FROM media' );
 
-    my $t = XML::Twig->new( twig_handlers => { Filme => \&media_to_db, }, );
+    my $t = XML::Twig->new( twig_handlers => { Filme => \&_media_to_db, }, );
 
     # Prepare the statement handlers
     my $sths = {};
@@ -426,7 +424,7 @@ sub refresh_media {
 # Local XML::Twig twig handler method for importing media to the database.
 # Expects to receive a twig with the required statement handlers initialised.
 # <Filme><Nr>0000</Nr><Sender>3Sat</Sender><Thema>3sat.full</Thema><Titel>Mediathek-Beiträge</Titel><Datum>04.09.2011</Datum><Zeit>19:23:11</Zeit><Url>http://wstreaming.zdf.de/3sat/veryhigh/110103_jazzbaltica2010ceu_musik.asx</Url><UrlOrg>http://wstreaming.zdf.de/3sat/300/110103_jazzbaltica2010ceu_musik.asx</UrlOrg><Datei>110103_jazzbaltica2010ceu_musik.asx</Datei><Film-alt>false</Film-alt></Filme>
-sub media_to_db {
+sub _media_to_db {
     my ( $t, $section ) = @_;
 
     my %values;
@@ -499,9 +497,9 @@ sub media_to_db {
 
 Count the number of videos matching your search criteria.
 
-=cut
+TODO: RCL 2011-10-28 Documentation
 
-# TODO: RCL 2011-10-28 Document search options
+=cut
 sub count_videos {
     my ( $self, $args ) = @_;
     my $sql =
@@ -550,9 +548,9 @@ sub count_videos {
 
 List the videos matching your search criteria.
 
-=cut
+TODO: RCL 2011-10-28 Document search options
 
-# TODO: RCL 2011-10-28 Document search options
+=cut
 sub list {
     my ( $self, $args ) = @_;
 
@@ -648,14 +646,16 @@ sub list {
 
 Download (to the target_dir) the videos matching your search criteria.
 
-=cut
+TODO: RCL 2011-10-28 Document search options
 
-# TODO: RCL 2011-10-28 Document search options
+=cut
 sub get_videos {
     my ( $self, $args ) = @_;
 
     $args->{list_all} = 1;
     my $list = $self->list( $args );
+
+    # TODO: RCL 2011-11-04 -1 is not a safe or intuitively understood value for "no abo"
     my $abo_id = $args->{abo_id} || -1;
 
     if ( !$list->{media} ) {
@@ -691,6 +691,7 @@ sub get_videos {
         }
         
         my $target_path = catfile( $target_dir, $title . '.avi' );
+        # TODO: RCL 2011-11-04 If this is an abo, check if it has already been downloaded downloaded         
         if ( $self->requires_download( { path => $target_path } ) && !$args->{test} ) {
             $self->log->info(
                 sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
@@ -721,6 +722,11 @@ sub get_videos {
     $sth->finish();
 }
 
+=head2 add_abo
+
+TODO: RCL 2012-01-26 Document
+
+=cut
 sub add_abo {
     my ( $self, $args ) = @_;
 
@@ -738,6 +744,11 @@ sub add_abo {
     $sth->finish();
 }
 
+=head2 del_abo
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub del_abo {
     my ( $self, $args ) = @_;
 
@@ -751,6 +762,11 @@ sub del_abo {
     }
 }
 
+=head2 get_abos
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub get_abos {
     my ( $self ) = @_;
 
@@ -763,6 +779,11 @@ sub get_abos {
     return @{$arr_ref};
 }
 
+=head2 run_abo
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub run_abo {
     my ( $self, $args ) = @_;
 
@@ -789,6 +810,11 @@ sub run_abo {
     }
 }
 
+=head2 get_downloaded_media
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub get_downloaded_media {
     my ( $self ) = @_;
 
@@ -806,6 +832,11 @@ sub get_downloaded_media {
     return @{$arr_ref};
 }
 
+=head2 del_downloaded
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub del_downloaded {
     my ( $self, $args ) = @_;
 
@@ -830,6 +861,11 @@ sub del_downloaded {
     }
 }
 
+=head2 expire_downloads
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub expire_downloads {
     my ( $self, $args ) = @_;
 
@@ -861,6 +897,11 @@ sub expire_downloads {
     }
 }
 
+=head2 requires_download
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub requires_download {
     my ( $self, $args ) = @_;
 
@@ -887,6 +928,11 @@ sub requires_download {
     return 1;
 }
 
+=head2 get_url_to_file
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub get_url_to_file {
     my ( $self, $url, $filename ) = @_;
     $self->log->debug( "Saving $url to $filename" );
@@ -912,6 +958,11 @@ sub get_url_to_file {
     close FH;
 }
 
+=head2 init_db
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub init_db {
     my ( $self ) = @_;
     $self->log->debug( sprintf "got cache file for db: %s\n", $self->cache_files->{db} );

@@ -1,10 +1,25 @@
 package TV::Mediathek::LoggerConfig;
-
-# Initialise with a default logger configuration, incase the client hasn't done something cleverer
-
 use Moose;
 use MooseX::Log::Log4perl;
 use Log::Log4perl;
+
+=head1 NAME
+
+TV::Mediathek::LoggerConfig - Initialise with a default logger configuration, incase the client hasn't done something cleverer
+
+=head1 VERSION
+
+Version 0.01
+
+=cut
+
+our $VERSION = '0.01';
+
+=head1 SYNOPSIS
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 
 has 'log_filename' => (
     is       => 'ro',
@@ -13,6 +28,11 @@ has 'log_filename' => (
     default  => '/tmp/mediathek.log',
 );
 
+=head2 init_logger
+
+TODO: RCL 2012-01-26 Documentation
+
+=cut
 sub init_logger {
     my $self = shift;
 
@@ -25,6 +45,22 @@ sub init_logger {
 }
 
 1;
+
+=head1 AUTHOR
+
+Robin Clarke, C<< <perl at robinclarke.net> >>
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright 2011 Robin Clarke.
+
+This program is free software; you can redistribute it and/or modify it
+under the terms of either: the GNU General Public License as published
+by the Free Software Foundation; or the Artistic License.
+
+See http://dev.perl.org/licenses/ for more information.
+
+=cut
 
 __DATA__
 log4perl.rootLogger=DEBUG, Screen, File

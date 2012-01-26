@@ -12,9 +12,34 @@ WriteMakefile(
       ? ('LICENSE'=> 'perl')
       : ()),
     PL_FILES            => {},
+    EXE_FILES	=> [ 'bin/mediathekp' ],
     PREREQ_PM => {
-        'Test::More' => 0,
+	'Class::Date'		=> 0,
+	'DBD::SQLite'		=> 0,
+	'DBI'			=> 0,
+	'Data::Dumper'		=> 0,
+	'ExtUtils::MakeMaker'	=> 0,
+	'File::HomeDir'		=> 0,
+	'File::Spec::Functions'	=> 0,
+	'File::Util'		=> 0,
+	'Format::Human::Bytes'	=> 0,
+	'Getopt::Long'		=> 0,
+	'Lingua::DE::ASCII'	=> 0,
+	'Log::Log4perl'		=> 0,
+	'Test::More'		=> 0,
+	'WWW::Mechanize'	=> 0,
+	'XML::Twig'		=> 0,
+	'YAML::Any'		=> 0,
     },
+    (! eval { ExtUtils::MakeMaker->VERSION(6.46) } ? () :
+     (META_ADD => {
+      resources => {
+      homepage   => 'https://github.com/robin13/mediathekp',
+      repository => 'https://github.com/robin13/mediathekp',
+      bugtracker => 'https://github.com/robin13/mediathekp/issues',
+      },
+      })
+    ),
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'TV-Mediathek-*' },
 );
