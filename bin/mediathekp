@@ -10,6 +10,7 @@ use File::Util;
 use Data::Dumper;
 use File::HomeDir;
 use File::Spec::Functions qw/catfile/;
+use Pod::Usage;
 
 $SIG{'INT'}  = 'cleanup';
 $SIG{'QUIT'} = 'cleanup';
@@ -49,12 +50,17 @@ my $result = GetOptions(
 
 
 if ( !$result ) {
-    die( "Illegal arguments...\n" );
+    pod2usage( 
+	-message    => "Illegal arguments...",
+	-verbose    => 1,
+	-exitval    => 1,
+	);
 }
 
 if ( $params{help} ) {
-    usage();
-    exit( 0 );
+    pod2usage(
+	-verbose => 1,
+	);
 }
 
 # Default params
@@ -86,9 +92,10 @@ my $f = File::Util->new();
     );
 
 if ( ! -d $params{cache_dir} ) {
-    warn( sprintf( "cache_dir (%s) must exist\n", $params{cache_dir} ) );
-    usage();
-    exit;
+    pod2usage( 
+	-message    => sprintf( "cache_dir (%s) must exist\n", $params{cache_dir} ),
+	-exitval    => 2,
+	);
 }
 
 # Pass the memory usage monitor to Mediathek
@@ -312,66 +319,189 @@ sub list_downloads {
     return $rtn;
 }
 
-sub usage {
-    print qq{Usage:
-  ./mediathek.pl [options]
+=head1 NAME
 
-Required Options:
-  --cache_dir   Cache directory to keep downloaded XMLs, zip files and database
-  --target_dir  If you use the action --download, where videos are downloaded to
+mediathkep - Mediathek search/download tool
 
+=head1 SYNOPSIS
 
-Optional options
-  --agent        User agent I should pretend to be. (Default Mediathek-PL/0.2)
-  --cache_time   Time for which downloaded files should be cached. (Default: 0)
-  --cookie_jar   Store your cookies somewhere else (Default in cache_dir)
-  --timeout      Seconds timeout for flvstreamer.  (Default: 10)
-  --flvstreamer  Location of your flvstreamer binary (Default: /usr/bin/flvstreamer)
-  --proxy        http Proxy to use (e.g. http://proxy:8080)
-                 flvstreamer can only work through a socks proxy!
-  --socks        Socks proxy to use for flvstreamer
-  --config       Load settings from a config file:
-                 you can put all the options listed here in a config file!
-  --tries        The number of tries Video::Flvstreamer should make per video
-                 There are often interruptions during a download, so a high number
-                 like 50 is pretty safe.  Default is 10
-  --help         Print this help out
+  mediathekp [options]
 
-Action options (--action ACTION):
-  count              Count number of videos matching your search
-  list               List the videos matching your search
-  list_downloads     List the videos previously downloaded
-  download           Download the videos matching your search
-  del_download,\$i    Deletes the video with id \$i from target_dir
-  add_abo,\$n,\$d      Create a new abo with name \$n that expires after \$d days.
-                     Specify search options (see below) to define the media
-                     belonging to an abo. To keep downloads forever, specify 0 days
-  del_abo,\$n         Delete an abo with name \$n
-  list_abos          Shows all abo names
-  run_abo,\$name      Runs the specified abo, downloading all media that is not
-                     yet in target_dir and that has not expired yet. Checks also
-                     if media has expired and removes it from the target
-  refresh_media      Refresh your database from the internet
-  init_db            (re)initialise your database (!!delete everything in DB!!)
+=head1 OPTIONS
 
-Search options:
-      One or more search options can be given
-      !! WARNING !! If you use the action --download, and no search
-      options, you will download ALL the videos...
-  --channel     Limit action to this channel
-  --theme       Limit action to this theme
-  --title       Limit action to this title
-  --date        Limit action to the media entry with given air date. 
-                Possible \$Modifiers are:
-                    "<"     earlier than the given date
-                    ">"     later than the given date
-                    "="     on the given date
-                The format is \$ModifierYYYY-MM-DD. 
-                Example (double quotes are needed!):
-                    --date ">2011-09-25"       
-  --id          Limit action to the media entry with this id
-  Search options can be explicit: Arte.DE
-  or contain wildcards: "Doku*"
-};
+=head2 Required
 
-}
+=over 4
+  
+=item --cache_dir
+
+Cache directory to keep downloaded XMLs, zip files and database
+
+=item --target_dir
+
+If you use the action --download, where videos are downloaded to
+
+=back
+
+=head2 Optional
+
+=over 4
+
+=item --agent
+
+User agent I should pretend to be. (Default Mediathek-PL/0.2)
+
+=item --cache_time
+
+Time for which downloaded files should be cached. (Default: 0)
+
+=item --cookie_jar
+
+Store your cookies somewhere else (Default in cache_dir)
+
+=item --timeout
+
+Seconds timeout for flvstreamer.  (Default: 10)
+
+=item --flvstreamer
+
+Location of your flvstreamer binary (Default: /usr/bin/flvstreamer)
+
+=item --proxy
+
+http Proxy to use (e.g. http://proxy:8080) !!But!! flvstreamer can only work through a socks proxy!
+
+=item --socks
+
+Socks proxy to use for flvstreamer
+
+=item --config
+
+Load settings from a config file:
+you can put all the options listed here in a config file!
+
+=item --tries
+
+The number of tries Video::Flvstreamer should make per video
+There are often interruptions during a download, so a high number
+like 50 is pretty safe.  Default is 10
+
+=item --help
+
+Print this help out
+
+=item --action
+
+Action options (I<--action ACTION>)
+
+=over 4
+
+=item count
+
+Count number of videos matching your search
+
+=item list
+
+List the videos matching your search
+
+=item list_downloads
+
+List the videos previously downloaded
+
+=item download
+
+Download the videos matching your search
+
+=item del_download,$i
+
+Deletes the video with id $i from target_dir
+
+=item add_abo,$n,$d
+
+Create a new abo with name $n that expires after $d days.
+Specify search options (see below) to define the media
+belonging to an abo. To keep downloads forever, specify 0 days
+
+=item del_abo,$n
+
+Delete an abo with name $n
+
+=item list_abos
+
+Shows all abo names
+
+=item run_abo,$name
+
+Runs the specified abo, downloading all media that is not
+yet in target_dir and that has not expired yet. Checks also
+if media has expired and removes it from the target
+
+=item refresh_media
+
+Refresh your database from the internet
+
+=item init_db
+
+(re)initialise your database (!!delete everything in DB!!)
+
+=back
+
+=back
+
+=head2 Search options
+
+One or more search options can be given
+
+B<!! WARNING !!> If you use the action --download, and no search
+options, you will download B<ALL> the videos...
+
+Search options can be explicit: "Arte.DE" or contain wildcards: "Doku*"
+
+=over 4
+
+=item --id
+
+Limit action to the media entry with this id
+
+=item --channel
+
+Limit action to this channel
+
+=item --theme
+
+Limit action to this theme
+
+=item --title
+
+Limit action to this title
+
+=item --date
+
+Limit action to the media entry with given air date. 
+
+Possible Modifiers are:
+
+=over 4 
+
+=item E<lt>
+
+earlier than the given date
+
+=item E<gt>
+
+later than the given date
+
+=item =
+
+on the given date
+
+The format is [Modifier]YYYY-MM-DD. 
+Example (double quotes are needed!):
+
+    --date ">2011-09-25"
+
+=back
+
+=back
+
+=cut
