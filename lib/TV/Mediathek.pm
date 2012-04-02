@@ -27,11 +27,11 @@ TV::Mediathek - Access to Mediathek
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 SYNOPSIS
 
@@ -689,13 +689,16 @@ sub get_videos {
         if( $self->date_in_filename ){ 
             $title = sprintf( '%s_%s', $date, $title );
         }
-        
+
+        # TODO: RCL 2012-03-20 It's not always an avi... often mms streams are wmv
         my $target_path = catfile( $target_dir, $title . '.avi' );
+
         # TODO: RCL 2011-11-04 If this is an abo, check if it has already been downloaded downloaded         
         if ( $self->requires_download( { path => $target_path } ) && !$args->{test} ) {
             $self->log->info(
                 sprintf( "Getting %s%s || %s || %s", ( $args->{test} ? '>>TEST<< ' : '' ), $channel, $theme, $video->{title} ) );
             if ( $video->{url} =~ /^http/ ) {
+                $self->log->info( "Getting with mplayer" );
                 my @args = ( "/usr/bin/mplayer", "-playlist", to_ascii( $video->{url} ), "-dumpstream", "-dumpfile", $target_path );
                 $self->log->debug( sprintf( "Running: %s", "@args" ) );
                 system( @args ) == 0 or $self->log->warn( sprintf( "%s", $! ) );
