@@ -65,7 +65,7 @@ if ( $params{help} ) {
 
 # Default params
 %params = (
-    config  => catfile( File::HomeDir->my_home(), '.mediathekp.yaml' ),
+    config  => catfile( File::HomeDir->my_home(), '.mediathekp', 'config' ),
     %params
     );
 
@@ -84,7 +84,7 @@ if ( $params{config} && -f $params{config} ) {
 my $f = File::Util->new();
 %params = (
     agent       => 'Mediathek-PL/0.2',
-    cache_dir   => '/tmp/mediathek_cache',
+    cache_dir   => catfile( File::HomeDir->my_home(), '.mediathekp', 'cache' ),
     cache_time  => 0,
     timeout     => 10,
     cookie_jar  => catfile( $params{cache_dir}, 'cookie_jar.dat' ),
