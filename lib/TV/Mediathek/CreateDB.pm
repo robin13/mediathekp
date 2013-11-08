@@ -82,6 +82,7 @@ CREATE TABLE media(
     `filename` TEXT,
     `title` TEXT,
     `date` DATE,
+    `time` TEXT,
     `url` TEXT UNIQUE NOT NULL,
     `url_auth` TEXT,
     `url_hd` TEXT,
